@@ -2,6 +2,7 @@ import express, { Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
+import timeout from 'connect-timeout';
 import { config } from './config/env';
 import { logger } from './config/logger';
 import { mongoClient } from './storage/mongo';
@@ -17,14 +18,27 @@ import { apiRequestsTotal, apiRequestDuration } from './utils/metrics';
 export function createApp(): Application {
   const app = express();
 
+  // Request timeout
+  app.use(timeout('30s'));
+  app.use((req, res, next) => {
+    if (!req.timedout) next();
+  });
+
   // Security middleware
   app.use(helmet());
-  app.use(cors());
+  app.use(
+    cors({
+      origin: config.ALLOWED_ORIGINS,
+      credentials: true,
+      methods: ['GET', 'POST'],
+      maxAge: 86400, // 24 hours
+    })
+  );
   app.use(compression());
 
-  // Body parsing
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Body parsing with size limits
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Request logging and metrics
   app.use((req, res, next) => {

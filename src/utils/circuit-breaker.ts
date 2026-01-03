@@ -17,6 +17,16 @@ const defaultOptions: CircuitBreakerOptions = {
   rollingCountBuckets: 10,
 };
 
+export class CircuitBreakerError extends Error {
+  constructor(
+    public breakerName: string,
+    message: string
+  ) {
+    super(`Circuit breaker ${breakerName}: ${message}`);
+    this.name = 'CircuitBreakerError';
+  }
+}
+
 export function createCircuitBreaker<T, R>(
   fn: (...args: T[]) => Promise<R>,
   name: string,
@@ -42,6 +52,14 @@ export function createCircuitBreaker<T, R>(
   breaker.on('fallback', (result: unknown) => {
     logger.warn(`Circuit breaker fallback triggered: ${name}`, { result });
   });
+
+  // Wrap fire() to throw CircuitBreakerError
+  const originalFire = breaker.fire.bind(breaker);
+  breaker.fire = (...args: T[]): Promise<R> => {
+    return originalFire(...args).catch((error: Error) => {
+      throw new CircuitBreakerError(name, error.message);
+    });
+  };
 
   return breaker;
 }

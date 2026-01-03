@@ -48,6 +48,12 @@ const envSchema = z.object({
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_GLOBAL_MAX: z.coerce.number().int().positive().default(10000),
 
+  // CORS
+  ALLOWED_ORIGINS: z
+    .string()
+    .default('http://localhost:3000,http://localhost:3001')
+    .transform((str) => str.split(',').map((origin) => origin.trim())),
+
   // API Keys
   ADMIN_API_KEYS: z.string().min(1),
 

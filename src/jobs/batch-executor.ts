@@ -9,7 +9,6 @@ import { FeatureExtractor } from '../algorithms/feature-extraction';
 import { SimilarityCalculator } from '../algorithms/similarity';
 import { CollaborativeFilter } from '../algorithms/collaborative-filtering';
 import { AssociationRuleMiner } from '../algorithms/association-rules';
-import { RecommendationEngine } from '../engine/recommendation-engine';
 import { redisClient } from '../storage/redis';
 import { config } from '../config/env';
 import { logger } from '../config/logger';

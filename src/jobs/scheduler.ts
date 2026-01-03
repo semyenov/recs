@@ -27,7 +27,8 @@ export class JobScheduler {
     const redis = redisClient.getClient();
 
     this.queue = new Queue('recommendations', {
-      connection: redis,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+      connection: redis as any, // BullMQ type compatibility
     });
 
     logger.info('✅ BullMQ job scheduler initialized');
@@ -109,7 +110,8 @@ export class JobScheduler {
         }
       },
       {
-        connection: redis,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+        connection: redis as any, // BullMQ type compatibility
         concurrency,
         limiter: {
           max: config.BULLMQ_MAX_JOBS_PER_WORKER,

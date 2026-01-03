@@ -22,10 +22,11 @@ export function errorHandler(error: Error, req: Request, res: Response, _next: N
     return;
   }
 
-  // Default error
+  // Default error - mask details in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
   res.status(500).json({
     error: 'Internal server error',
-    message: error.message,
+    ...(isDevelopment && { message: error.message, stack: error.stack }),
   });
 }
 

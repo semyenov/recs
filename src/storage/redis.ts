@@ -2,7 +2,7 @@ import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/env';
 import { logger } from '../config/logger';
 
-class RedisClient {
+export class RedisClient {
   private client: RedisClientType | null = null;
 
   async connect(): Promise<void> {
@@ -102,6 +102,10 @@ class RedisClient {
   async keys(pattern: string): Promise<string[]> {
     const client = this.getClient();
     return await client.keys(pattern);
+  }
+
+  isConnected(): boolean {
+    return this.client !== null && this.client.isReady;
   }
 }
 
