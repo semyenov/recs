@@ -62,7 +62,7 @@ Recommended: 3+ application servers behind load balancer
 
 ```bash
 git clone <repository-url>
-cd rocommendations
+cd recommendations
 npm ci --production
 npm run build
 ```
@@ -128,7 +128,7 @@ After=network.target
 [Service]
 Type=simple
 User=recuser
-WorkingDirectory=/opt/rocommendations
+WorkingDirectory=/opt/recommendations
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=10
@@ -150,7 +150,7 @@ After=network.target
 [Service]
 Type=simple
 User=recuser
-WorkingDirectory=/opt/rocommendations
+WorkingDirectory=/opt/recommendations
 ExecStart=/usr/bin/node dist/worker.js
 Restart=always
 RestartSec=10
@@ -382,7 +382,7 @@ sudo systemctl stop rec-api rec-worker
 
 2. **Restore previous version**:
 ```bash
-cd /opt/rocommendations
+cd /opt/recommendations
 git checkout <previous-tag>
 npm ci --production
 npm run build

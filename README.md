@@ -43,7 +43,7 @@ A hybrid product recommendation service built with TypeScript, MongoDB, and Redi
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd rocommendations
+cd recommendations
 ```
 
 2. Install dependencies:

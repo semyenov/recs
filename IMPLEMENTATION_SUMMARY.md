@@ -12,7 +12,7 @@
 ## 📦 **Project Structure**
 
 ```
-rocommendations/
+recommendations/
 ├── src/
 │   ├── algorithms/           # Recommendation algorithms
 │   │   ├── feature-extraction.ts

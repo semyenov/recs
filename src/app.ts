@@ -20,7 +20,7 @@ export function createApp(): Application {
 
   // Request timeout
   app.use(timeout('30s'));
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     if (!req.timedout) next();
   });
 
