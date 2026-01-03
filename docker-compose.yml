@@ -1,0 +1,152 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: recommendations-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: recommendations
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/recommendations --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: recommendations-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recommendations-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      LOG_LEVEL: info
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/recommendations?authSource=admin
+      MONGODB_MAX_POOL_SIZE: 100
+      MONGODB_MIN_POOL_SIZE: 10
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      REDIS_MAX_MEMORY: 2gb
+      REDIS_EVICTION_POLICY: allkeys-lru
+      BULLMQ_CONCURRENCY: 2
+      BULLMQ_MAX_JOBS_PER_WORKER: 100
+      BATCH_SIZE: 10000
+      PRE_COMPUTE_TOP_N: 100
+      MIN_SCORE_THRESHOLD: 0.3
+      DIVERSITY_THRESHOLD: 0.6
+      MIN_ORDERS_PER_PRODUCT: 3
+      CONFIDENCE_THRESHOLD: 0.3
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      RATE_LIMIT_GLOBAL_MAX: 10000
+      ADMIN_API_KEYS: admin-key-docker-123
+      ENABLE_METRICS: "true"
+      METRICS_PORT: 9090
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recommendations-worker
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: info
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/recommendations?authSource=admin
+      MONGODB_MAX_POOL_SIZE: 100
+      MONGODB_MIN_POOL_SIZE: 10
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      REDIS_MAX_MEMORY: 2gb
+      REDIS_EVICTION_POLICY: allkeys-lru
+      BULLMQ_CONCURRENCY: 2
+      BULLMQ_MAX_JOBS_PER_WORKER: 100
+      BATCH_SIZE: 10000
+      PRE_COMPUTE_TOP_N: 100
+      MIN_SCORE_THRESHOLD: 0.3
+      DIVERSITY_THRESHOLD: 0.6
+      MIN_ORDERS_PER_PRODUCT: 3
+      CONFIDENCE_THRESHOLD: 0.3
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      RATE_LIMIT_GLOBAL_MAX: 10000
+      ADMIN_API_KEYS: admin-key-docker-123
+      ENABLE_METRICS: "false"
+      METRICS_PORT: 9091
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: recommendations-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - api
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+networks:
+  default:
+    name: recommendations-network
