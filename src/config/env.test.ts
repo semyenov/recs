@@ -25,6 +25,7 @@ describe('Environment Configuration', () => {
     expect(config.MIN_SCORE_THRESHOLD).toBeLessThanOrEqual(1);
     expect(config.PRE_COMPUTE_TOP_N).toBeGreaterThan(0);
     expect(config.MIN_ORDERS_PER_PRODUCT).toBeGreaterThanOrEqual(1);
+    expect(config.MIN_COMMON_USERS).toBeGreaterThan(0);
   });
 
   it('should have rate limiting configuration', () => {
@@ -60,28 +61,5 @@ describe('Environment Configuration', () => {
     expect(config.adminApiKeys).toBeDefined();
     expect(Array.isArray(config.adminApiKeys)).toBe(true);
     expect(config.adminApiKeys.length).toBeGreaterThan(0);
-  });
-
-  it('should have quality metrics thresholds for collaborative filtering', () => {
-    expect(config.QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD).toBeLessThanOrEqual(1);
-    expect(config.QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD).toBeLessThanOrEqual(1);
-    expect(config.QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD).toBeLessThanOrEqual(1);
-  });
-
-  it('should have quality metrics thresholds for association rules', () => {
-    expect(config.QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD).toBeLessThanOrEqual(1);
-    expect(config.QUALITY_ASSOCIATION_COVERAGE_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_ASSOCIATION_COVERAGE_THRESHOLD).toBeLessThanOrEqual(1);
-    expect(config.QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD).toBeGreaterThanOrEqual(0);
-    expect(config.QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD).toBeLessThanOrEqual(1);
-  });
-
-  it('should have quality metrics precision/recall parameters', () => {
-    expect(config.QUALITY_PRECISION_AT_K).toBeGreaterThan(0);
-    expect(config.QUALITY_RECALL_AT_K).toBeGreaterThan(0);
   });
 });

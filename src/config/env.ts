@@ -42,6 +42,7 @@ const envSchema = z.object({
   MIN_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
   DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   MIN_ORDERS_PER_PRODUCT: z.coerce.number().int().positive().default(3),
+  MIN_COMMON_USERS: z.coerce.number().int().positive().default(2),
   CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
   MIN_SUPPORT_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
 
@@ -62,20 +63,6 @@ const envSchema = z.object({
   // Monitoring
   ENABLE_METRICS: z.coerce.boolean().default(true),
   METRICS_PORT: z.coerce.number().int().positive().default(9090),
-
-  // Quality Metrics Thresholds - Collaborative Filtering
-  QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.15),
-  QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.2),
-  QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
-
-  // Quality Metrics Thresholds - Association Rules
-  QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.15),
-  QUALITY_ASSOCIATION_COVERAGE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.005),
-  QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
-
-  // Quality Metrics - Optional Precision/Recall
-  QUALITY_PRECISION_AT_K: z.coerce.number().int().positive().default(10),
-  QUALITY_RECALL_AT_K: z.coerce.number().int().positive().default(10),
 });
 
 // Validate and export

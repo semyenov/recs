@@ -38,7 +38,7 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders, 1);
+      const similarities = cf.computeItemBasedSimilarity(orders);
 
       expect(similarities.size).toBeGreaterThan(0);
       expect(similarities.has('P001')).toBe(true);
@@ -66,8 +66,8 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      // Only 1 user, but minCommonUsers = 2
-      const similarities = cf.computeItemBasedSimilarity(orders, 2);
+      // Only 1 user, but minCommonUsers = 2 (default from config)
+      const similarities = cf.computeItemBasedSimilarity(orders);
 
       // Should have entries but no similarities due to min threshold
       const p001Similar = similarities.get('P001');
@@ -75,7 +75,7 @@ describe('CollaborativeFilter', () => {
     });
 
     it('should handle empty orders', () => {
-      const similarities = cf.computeItemBasedSimilarity([], 1);
+      const similarities = cf.computeItemBasedSimilarity([]);
 
       expect(similarities.size).toBe(0);
     });
@@ -120,14 +120,16 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders, 1);
+      const similarities = cf.computeItemBasedSimilarity(orders);
 
-      // P001 and P002 share 1 user out of 2 total = 0.5 Jaccard
+      // P001 and P002 share 1 user, but minCommonUsers = 2, so no similarity
+      // P001 and P003 share 1 user, but minCommonUsers = 2, so no similarity
+      // P002 and P003 share 1 user, but minCommonUsers = 2, so no similarity
+      // With default minCommonUsers=2, none of these pairs meet the threshold
       const p001Similar = similarities.get('P001');
       expect(p001Similar).toBeDefined();
-      const p002Entry = p001Similar!.find((s) => s.productId === 'P002');
-      expect(p002Entry).toBeDefined();
-      expect(p002Entry!.score).toBeCloseTo(0.33, 1); // 1 shared / 3 total users
+      // Since minCommonUsers=2 and no pair shares 2 users, similarities should be empty
+      expect(p001Similar!.length).toBe(0);
     });
   });
 
@@ -151,25 +153,36 @@ describe('CollaborativeFilter', () => {
           contragentId: 'U002',
           products: {
             P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
           },
-          summary: 10,
+          summary: 30,
           date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '3',
           number: 'O003',
-          contragentId: 'U002',
+          contragentId: 'U003',
           products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
             P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
           },
-          summary: 20,
+          summary: 30,
           date: new Date(),
           createdAt: new Date(),
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders, 1);
+      const similarities = cf.computeItemBasedSimilarity(orders);
+      
+      // Verify similarity was computed: P001 should have P002 as similar (they share U002 and U003)
+      const p001Similar = similarities.get('P001');
+      expect(p001Similar).toBeDefined();
+      expect(p001Similar!.length).toBeGreaterThan(0);
+      const p002Similarity = p001Similar!.find((s) => s.productId === 'P002');
+      expect(p002Similarity).toBeDefined();
+      expect(p002Similarity!.score).toBeGreaterThan(0);
+      
       const recommendations = cf.getUserRecommendations('U001', orders, similarities, 10);
 
       expect(recommendations.length).toBeGreaterThan(0);

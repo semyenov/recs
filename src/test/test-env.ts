@@ -15,6 +15,7 @@ process.env.PRE_COMPUTE_TOP_N = '10';
 process.env.MIN_SCORE_THRESHOLD = '0.3';
 process.env.DIVERSITY_THRESHOLD = '0.6';
 process.env.MIN_ORDERS_PER_PRODUCT = '2';
+process.env.MIN_COMMON_USERS = '2';
 process.env.CONFIDENCE_THRESHOLD = '0.3';
 process.env.MIN_SUPPORT_THRESHOLD = '0.001';
 process.env.RATE_LIMIT_WINDOW_MS = '60000';

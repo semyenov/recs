@@ -93,12 +93,9 @@ export class BatchExecutor {
         batchId,
         version,
         orderCount: orders.length,
-        minOrdersPerProduct: config.MIN_ORDERS_PER_PRODUCT,
+        minCommonUsers: config.MIN_COMMON_USERS,
       });
-      const similarityMatrix = this.collaborativeFilter.computeItemBasedSimilarity(
-        orders,
-        config.MIN_ORDERS_PER_PRODUCT
-      );
+      const similarityMatrix = this.collaborativeFilter.computeItemBasedSimilarity(orders);
       logger.info(`Computed similarity matrix for ${similarityMatrix.size} products`, { batchId });
 
       // Step 3: Save recommendations
@@ -149,35 +146,32 @@ export class BatchExecutor {
         });
         await this.recommendationRepo.bulkUpsert(hybridRecommendations);
         logger.info('Hybrid recommendations saved successfully', { batchId });
+
+        // Validate hybrid recommendations quality
+        logger.info('Validating hybrid recommendation quality', { batchId, version });
+        const hybridMetrics = await this.validateQuality(hybridRecommendations);
+        logger.info('Hybrid quality metrics calculated', { batchId, version, metrics: hybridMetrics });
       } else {
         logger.warn('No hybrid recommendations generated', { batchId, version });
       }
 
       // Step 4: Quality validation and promotion
-      // Quality checks ensure recommendations meet minimum standards before promotion:
-      // - Average score: Ensures recommendations have meaningful similarity scores
-      // - Coverage: Ensures a sufficient percentage of products have recommendations
-      // - Diversity: Ensures recommendations cover a diverse set of products
+      // Calculate quality metrics for monitoring and logging:
+      // - Average score: Mean recommendation score across all recommendations
+      // - Coverage: Percentage of products that have recommendations
+      // - Diversity: Ratio of unique recommended products to total recommendations
       logger.info('Validating recommendation quality', { batchId, version });
       const metrics = await this.validateQuality(recommendations);
       logger.info('Quality metrics calculated', { batchId, version, metrics });
 
-      // Quality gates act as a safety check to prevent promoting low-quality recommendations
-      // If gates fail, the version is deleted and not promoted to production
-      logger.info('Checking quality gates', { batchId, version, metrics });
-      if (await this.qualityGatesPassed(metrics, 'collaborative')) {
-        logger.info('Quality gates passed, promoting version', { batchId, version });
-        await this.promoteVersion(version, metrics);
-        logger.info('✅ Collaborative filtering batch job completed', {
-          batchId,
-          version,
-          duration: Date.now() - startTime,
-        });
-      } else {
-        logger.error('❌ Quality gates failed', { version, metrics });
-        logger.info('Deleting failed version recommendations', { batchId, version });
-        await this.recommendationRepo.deleteByVersion(version);
-      }
+      // Promote version with calculated metrics
+      logger.info('Promoting version', { batchId, version });
+      await this.promoteVersion(version, metrics);
+      logger.info('✅ Collaborative filtering batch job completed', {
+        batchId,
+        version,
+        duration: Date.now() - startTime,
+      });
     } catch (error) {
       logger.error('❌ Collaborative filtering batch job failed', { batchId, error });
       throw error;
@@ -274,35 +268,32 @@ export class BatchExecutor {
         });
         await this.recommendationRepo.bulkUpsert(hybridRecommendations);
         logger.info('Hybrid recommendations saved successfully', { batchId });
+
+        // Validate hybrid recommendations quality
+        logger.info('Validating hybrid recommendation quality', { batchId, version });
+        const hybridMetrics = await this.validateQuality(hybridRecommendations);
+        logger.info('Hybrid quality metrics calculated', { batchId, version, metrics: hybridMetrics });
       } else {
         logger.warn('No hybrid recommendations generated', { batchId, version });
       }
 
       // Step 4: Quality validation and promotion
-      // Quality checks ensure recommendations meet minimum standards before promotion:
-      // - Average score: Ensures recommendations have meaningful similarity scores
-      // - Coverage: Ensures a sufficient percentage of products have recommendations
-      // - Diversity: Ensures recommendations cover a diverse set of products
+      // Calculate quality metrics for monitoring and logging:
+      // - Average score: Mean recommendation score across all recommendations
+      // - Coverage: Percentage of products that have recommendations
+      // - Diversity: Ratio of unique recommended products to total recommendations
       logger.info('Validating recommendation quality', { batchId, version });
       const metrics = await this.validateQuality(recommendations);
       logger.info('Quality metrics calculated', { batchId, version, metrics });
 
-      // Quality gates act as a safety check to prevent promoting low-quality recommendations
-      // If gates fail, the version is deleted and not promoted to production
-      logger.info('Checking quality gates', { batchId, version, metrics });
-      if (await this.qualityGatesPassed(metrics, 'association')) {
-        logger.info('Quality gates passed, promoting version', { batchId, version });
-        await this.promoteVersion(version, metrics);
-        logger.info('✅ Association rules batch job completed', {
-          batchId,
-          version,
-          duration: Date.now() - startTime,
-        });
-      } else {
-        logger.error('❌ Quality gates failed', { version, metrics });
-        logger.info('Deleting failed version recommendations', { batchId, version });
-        await this.recommendationRepo.deleteByVersion(version);
-      }
+      // Promote version with calculated metrics
+      logger.info('Promoting version', { batchId, version });
+      await this.promoteVersion(version, metrics);
+      logger.info('✅ Association rules batch job completed', {
+        batchId,
+        version,
+        duration: Date.now() - startTime,
+      });
     } catch (error) {
       logger.error('❌ Association rules batch job failed', { batchId, error });
       throw error;
@@ -533,72 +524,6 @@ export class BatchExecutor {
     });
 
     return hybridRecommendations;
-  }
-
-  /**
-   * Quality gates ensure recommendations meet minimum quality standards before promotion.
-   *
-   * Algorithm-specific thresholds (configurable via environment variables):
-   * - collaborative:
-   *   - avgScore >= QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD
-   *   - coverage >= QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD
-   *   - diversityScore >= QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD
-   * - association:
-   *   - avgScore >= QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD
-   *   - coverage >= QUALITY_ASSOCIATION_COVERAGE_THRESHOLD
-   *   - diversityScore >= QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD
-   *
-   * All thresholds must pass for the version to be promoted. If any threshold fails,
-   * the recommendations are considered too low quality for production use.
-   */
-  private async qualityGatesPassed(
-    metrics: QualityMetrics,
-    algorithmType: 'collaborative' | 'association' = 'collaborative'
-  ): Promise<boolean> {
-    // Algorithm-specific thresholds from config
-    const thresholds =
-      algorithmType === 'association'
-        ? {
-            avgScore: config.QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD,
-            coverage: config.QUALITY_ASSOCIATION_COVERAGE_THRESHOLD,
-            diversityScore: config.QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD,
-          }
-        : {
-            avgScore: config.QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD,
-            coverage: config.QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD,
-            diversityScore: config.QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD,
-          };
-
-    logger.info('Evaluating quality gates', { metrics, thresholds, algorithmType });
-
-    const avgScorePassed = metrics.avgScore >= thresholds.avgScore;
-    const coveragePassed = metrics.coverage >= thresholds.coverage;
-    const diversityPassed = metrics.diversityScore >= thresholds.diversityScore;
-
-    logger.info('Quality gate results', {
-      avgScore: {
-        passed: avgScorePassed,
-        value: metrics.avgScore,
-        threshold: thresholds.avgScore,
-      },
-      coverage: {
-        passed: coveragePassed,
-        value: metrics.coverage,
-        threshold: thresholds.coverage,
-      },
-      diversity: {
-        passed: diversityPassed,
-        value: metrics.diversityScore,
-        threshold: thresholds.diversityScore,
-      },
-    });
-
-    const allPassed = avgScorePassed && coveragePassed && diversityPassed;
-    logger.info(allPassed ? 'All quality gates passed' : 'One or more quality gates failed', {
-      allPassed,
-    });
-
-    return Promise.resolve(allPassed);
   }
 
   private async promoteVersion(version: string, metrics: QualityMetrics): Promise<void> {

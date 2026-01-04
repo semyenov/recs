@@ -1,5 +1,6 @@
 import { Order } from '../types';
 import { logger } from '../config/logger';
+import { config } from '../config/env';
 
 export class CollaborativeFilter {
   /**
@@ -7,9 +8,9 @@ export class CollaborativeFilter {
    * Returns map of _id -> list of similar products with scores
    */
   computeItemBasedSimilarity(
-    orders: Order[],
-    minCommonUsers: number = 2
+    orders: Order[]
   ): Map<string, Array<{ productId: string; score: number }>> {
+    const minCommonUsers = config.MIN_COMMON_USERS;
     logger.info(
       `[CollaborativeFilter] Starting item-based similarity computation from ${orders.length} orders (minCommonUsers: ${minCommonUsers})`
     );
