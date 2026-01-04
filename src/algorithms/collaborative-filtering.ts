@@ -9,7 +9,7 @@ export class CollaborativeFilter {
   computeItemBasedSimilarity(
     orders: Order[],
     minCommonUsers: number = 2
-  ): Map<string, Array<{ _id: string; score: number }>> {
+  ): Map<string, Array<{ productId: string; score: number }>> {
     logger.info(
       `[CollaborativeFilter] Starting item-based similarity computation from ${orders.length} orders (minCommonUsers: ${minCommonUsers})`
     );
@@ -45,7 +45,7 @@ export class CollaborativeFilter {
     logger.info(
       '[CollaborativeFilter] Step 2: Computing item-item similarity using Jaccard similarity'
     );
-    const similarityMatrix = new Map<string, Array<{ _id: string; score: number }>>();
+    const similarityMatrix = new Map<string, Array<{ productId: string; score: number }>>();
 
     const allProducts = Array.from(productContragents.keys());
     logger.info(`[CollaborativeFilter] Computing similarities for ${allProducts.length} products`);
@@ -55,7 +55,7 @@ export class CollaborativeFilter {
 
     for (const productA of allProducts) {
       const contragentsA = productContragents.get(productA)!;
-      const similarities: Array<{ _id: string; score: number }> = [];
+      const similarities: Array<{ productId: string; score: number }> = [];
 
       for (const productB of allProducts) {
         if (productA === productB) continue;
@@ -68,7 +68,7 @@ export class CollaborativeFilter {
 
         if (intersection.size >= minCommonUsers) {
           const similarity = intersection.size / union.size;
-          similarities.push({ _id: productB, score: similarity });
+          similarities.push({ productId: productB, score: similarity });
         }
       }
 
@@ -101,9 +101,9 @@ export class CollaborativeFilter {
   getUserRecommendations(
     contragentId: string,
     orders: Order[],
-    similarityMatrix: Map<string, Array<{ _id: string; score: number }>>,
+    similarityMatrix: Map<string, Array<{ productId: string; score: number }>>,
     topN: number
-  ): Array<{ _id: string; score: number }> {
+  ): Array<{ productId: string; score: number }> {
     logger.info(
       `[CollaborativeFilter] Getting personalized recommendations for contragent ${contragentId} (topN: ${topN})`
     );
@@ -133,7 +133,7 @@ export class CollaborativeFilter {
     for (const productId of purchasedProducts) {
       const similar = similarityMatrix.get(productId) || [];
 
-      for (const { _id: candidateId, score } of similar) {
+      for (const { productId: candidateId, score } of similar) {
         // Don't recommend already purchased products
         if (purchasedProducts.has(candidateId)) continue;
 
@@ -148,11 +148,11 @@ export class CollaborativeFilter {
 
     // Convert to array, normalize by number of purchased products, sort, and take top N
     const recommendations = Array.from(candidateScores.entries())
-      .map(([_id, totalScore]) => ({
-        _id,
-        score: totalScore / purchasedProducts.size, // Normalize
+      .map(([productId, totalScore]) => ({
+        productId,
+        score: totalScore / purchasedProducts.size, // Normalize,
       }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.score - a.score,)
       .slice(0, topN);
 
     logger.info(

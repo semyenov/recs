@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { redisClient } from '../../storage/redis';
 import { config } from '../../config/env';
@@ -37,7 +37,7 @@ export const ipRateLimiter = rateLimit({
   legacyHeaders: false,
   store: createRedisStoreIfAvailable('rl:ip:'),
   keyGenerator: (req): string => {
-    return req.ip || 'unknown';
+    return ipKeyGenerator(req.ip || 'unknown');
   },
 });
 

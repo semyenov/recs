@@ -11,13 +11,13 @@ describe('RecommendationEngine', () => {
   describe('blendRecommendations', () => {
     it('should blend recommendations from multiple algorithms', () => {
       const collaborative = [
-        { _id: 'P002', score: 0.85 },
-        { _id: 'P003', score: 0.75 },
+        { productId: 'P002', score: 0.85 },
+        { productId: 'P003', score: 0.75 },
       ];
 
       const association = [
-        { _id: 'P003', score: 0.7 },
-        { _id: 'P004', score: 0.6 },
+        { productId: 'P003', score: 0.7 },
+        { productId: 'P004', score: 0.6 },
       ];
 
       const weights = { collaborative: 0.6, association: 0.4 };
@@ -30,14 +30,14 @@ describe('RecommendationEngine', () => {
       );
 
       expect(blended.length).toBeGreaterThan(0);
-      expect(blended[0]).toHaveProperty('_id');
+      expect(blended[0]).toHaveProperty('productId');
       expect(blended[0]).toHaveProperty('score');
       expect(blended[0]).toHaveProperty('breakdown');
     });
 
     it('should calculate blended scores correctly', () => {
-      const collaborative = [{ _id: 'P001', score: 0.8 }];
-      const association = [{ _id: 'P001', score: 0.6 }];
+      const collaborative = [{ productId: 'P001', score: 0.8 }];
+      const association = [{ productId: 'P001', score: 0.6 }];
 
       const weights = { collaborative: 0.6, association: 0.4 };
 
@@ -53,8 +53,8 @@ describe('RecommendationEngine', () => {
     });
 
     it('should sort results by blended score descending', () => {
-      const collaborative = [{ _id: 'P001', score: 0.9 }];
-      const association: Array<{ _id: string; score: number }> = [];
+      const collaborative = [{ productId: 'P001', score: 0.9 }];
+      const association: Array<{ productId: string; score: number }> = [];
 
       const weights = { collaborative: 1.0, association: 0.0 };
 
@@ -73,12 +73,12 @@ describe('RecommendationEngine', () => {
 
     it('should limit results to topN', () => {
       const collaborative = [
-        { _id: 'P001', score: 0.9 },
-        { _id: 'P002', score: 0.8 },
-        { _id: 'P003', score: 0.7 },
+        { productId: 'P001', score: 0.9 },
+        { productId: 'P002', score: 0.8 },
+        { productId: 'P003', score: 0.7 },
       ];
 
-      const association: Array<{ _id: string; score: number }> = [];
+      const association: Array<{ productId: string; score: number }> = [];
 
       const weights = { collaborative: 1.0, association: 0.0 };
 
@@ -94,8 +94,8 @@ describe('RecommendationEngine', () => {
     });
 
     it('should include score breakdown in results', () => {
-      const collaborative = [{ _id: 'P001', score: 0.8 }];
-      const association = [{ _id: 'P001', score: 0.7 }];
+      const collaborative = [{ productId: 'P001', score: 0.8 }];
+      const association = [{ productId: 'P001', score: 0.7 }];
 
       const weights = { collaborative: 0.6, association: 0.4 };
 
@@ -155,7 +155,7 @@ describe('RecommendationEngine', () => {
     it('should boost scores for new products', () => {
       const recommendations = [
         {
-          _id: 'P001',
+          productId: 'P001',
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,
@@ -174,7 +174,7 @@ describe('RecommendationEngine', () => {
     it('should not modify scores for non-new products', () => {
       const recommendations = [
         {
-          _id: 'P001',
+          productId: 'P001',
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,
@@ -192,7 +192,7 @@ describe('RecommendationEngine', () => {
     it('should apply custom boost factor', () => {
       const recommendations = [
         {
-          _id: 'P001',
+          productId: 'P001',
           score: 0.5,
           breakdown: {
             blendedScore: 0.5,
@@ -210,7 +210,7 @@ describe('RecommendationEngine', () => {
     it('should handle empty new products set', () => {
       const recommendations = [
         {
-          _id: 'P001',
+          productId: 'P001',
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,

@@ -18,9 +18,9 @@ const recommendationEngine = new RecommendationEngine();
  */
 async function loadCollaborativeSimilarityMatrix(
   version: string
-): Promise<Map<string, Array<{ _id: string; score: number }>>> {
+): Promise<Map<string, Array<{ productId: string; score: number }>>> {
   const cacheKey = `collab_similarity:${version}`;
-  let matrix = await redisClient.get<Map<string, Array<{ _id: string; score: number }>>>(cacheKey);
+  let matrix = await redisClient.get<Map<string, Array<{ productId: string; score: number }>>>(cacheKey);
 
   if (!matrix) {
     // Load from MongoDB and build matrix
@@ -30,7 +30,7 @@ async function loadCollaborativeSimilarityMatrix(
     for (const rec of recommendations) {
       if (rec.algorithmType === 'collaborative') {
         const similar = rec.recommendations.map((r) => ({
-          _id: r._id,
+          productId: r.productId,
           score: r.score,
         }));
         matrix.set(rec.productId, similar);
@@ -48,10 +48,10 @@ async function loadCollaborativeSimilarityMatrix(
  * Helper: Convert stored recommendations to algorithm input format
  */
 function convertRecommendationsToAlgorithmFormat(
-  recommendations: Array<{ _id: string; score: number }>
-): Array<{ _id: string; score: number }> {
+  recommendations: Array<{ productId: string; score: number }>
+): Array<{ productId: string; score: number }> {
   return recommendations.map((r) => ({
-    _id: r._id,
+    productId: r.productId,
     score: r.score,
   }));
 }
@@ -83,7 +83,7 @@ router.get('/products/:productId/frequently-bought-with', async (req, res, next)
       recommendations: dbRec.recommendations
         .slice(query.offset, query.offset + query.limit)
         .map((r, idx) => ({
-          productId: r._id,
+          productId: r.productId,
           score: r.score,
           rank: query.offset + idx + 1,
         })),
@@ -132,7 +132,7 @@ router.get('/contragents/:contragentId/recommended', async (req, res, next) => {
       const contragentOrders = await orderRepo.findByContragentId(contragentId);
       const hasPurchaseHistory = contragentOrders.length > 0;
 
-      let recommendations: Array<{ _id: string; score: number }> = [];
+      let recommendations: Array<{ productId: string; score: number }> = [];
 
       if (hasPurchaseHistory) {
         // Use collaborative filtering
@@ -167,7 +167,7 @@ router.get('/contragents/:contragentId/recommended', async (req, res, next) => {
         contragentId,
         productId: contragentId, // Use contragentId as productId for compatibility
         recommendations: paginatedRecs.map((r, idx) => ({
-          productId: r._id,
+          productId: r.productId,
           score: r.score,
           rank: query.offset + idx + 1,
         })),
@@ -273,7 +273,7 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
       const response: RecommendationResponse = {
         productId,
         recommendations: paginatedRecs.map((r, idx) => ({
-          productId: r._id,
+          productId: r.productId,
           score: r.score,
           rank: query.offset + idx + 1,
         })),

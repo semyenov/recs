@@ -98,7 +98,7 @@ export interface Order {
 
 // Recommendation Types
 export interface RecommendationScore {
-  _id: string;
+  productId: string;
   score: number;
   breakdown: ScoreBreakdown;
 }

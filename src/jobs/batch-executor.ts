@@ -55,7 +55,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'collaborative',
           recommendations: topN.map((s) => ({
-            _id: s._id,
+            productId: s.productId,     
             score: s.score,
             breakdown: {
               collaborative: s.score,
@@ -160,7 +160,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'association',
           recommendations: topN.map((rule) => ({
-            _id: rule.consequent,
+            productId: rule.consequent,
             score: rule.confidence,
             breakdown: {
               association: rule.confidence,
@@ -270,7 +270,7 @@ export class BatchExecutor {
     const uniqueProducts = new Set<string>();
     for (const rec of recommendations) {
       for (const r of rec.recommendations) {
-        uniqueProducts.add(r._id);
+        uniqueProducts.add(r.productId);
       }
     }
     const diversityScore = totalRecs > 0 ? uniqueProducts.size / totalRecs : 0;

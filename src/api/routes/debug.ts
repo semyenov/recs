@@ -38,7 +38,7 @@ router.get(
       const response: DebugRecommendationResponse = {
         productId,
         recommendations: dbRec.recommendations.map((r, idx) => ({
-          productId: r._id,
+          productId: r.productId,
           score: r.score,
           rank: idx + 1,
         })),

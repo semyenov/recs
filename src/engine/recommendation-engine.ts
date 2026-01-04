@@ -11,8 +11,8 @@ export class RecommendationEngine {
    * Blend recommendations from multiple algorithms using weighted linear combination
    */
   blendRecommendations(
-    collaborative: Array<{ _id: string; score: number }>,
-    association: Array<{ _id: string; score: number }>,
+    collaborative: Array<{ productId: string; score: number }>,
+    association: Array<{ productId: string; score: number }>,
     weights: HybridWeights,
     topN: number
   ): RecommendationScore[] {
@@ -20,43 +20,43 @@ export class RecommendationEngine {
     const candidateScores = new Map<string, ScoreBreakdown>();
 
     // Add collaborative scores
-    for (const { _id, score } of collaborative) {
-      if (!candidateScores.has(_id)) {
-        candidateScores.set(_id, {
+    for (const { productId, score } of collaborative) {
+      if (!candidateScores.has(productId)) {
+        candidateScores.set(productId, {
           blendedScore: 0,
           weights,
         });
       }
-      const breakdown = candidateScores.get(_id)!;
+      const breakdown = candidateScores.get(productId)!;
       breakdown.collaborative = score;
     }
 
     // Add association scores
-    for (const { _id, score } of association) {
-      if (!candidateScores.has(_id)) {
-        candidateScores.set(_id, {
+    for (const { productId, score } of association) {
+      if (!candidateScores.has(productId)) {
+        candidateScores.set(productId, {
           blendedScore: 0,
           weights,
         });
       }
-      const breakdown = candidateScores.get(_id)!;
+      const breakdown = candidateScores.get(productId)!;
       breakdown.association = score;
     }
 
     // Calculate blended scores
-    for (const [_id, breakdown] of candidateScores) {
+    for (const [productId, breakdown] of candidateScores) {
       const collabScore = (breakdown.collaborative || 0) * weights.collaborative;
       const assocScore = (breakdown.association || 0) * weights.association;
 
       breakdown.blendedScore = collabScore + assocScore;
 
-      candidateScores.set(_id, breakdown);
+      candidateScores.set(productId, breakdown);
     }
 
     // Sort by blended score and filter by threshold
     const recommendations: RecommendationScore[] = Array.from(candidateScores.entries())
-      .map(([_id, breakdown]) => ({
-        _id,
+      .map(([productId, breakdown]) => ({
+        productId,
         score: breakdown.blendedScore,
         breakdown,
       }))
@@ -163,7 +163,7 @@ export class RecommendationEngine {
     boostFactor: number = 1.2
   ): RecommendationScore[] {
     return recommendations.map((rec) => {
-      if (newProductIds.has(rec._id)) {
+      if (newProductIds.has(rec.productId)) {
         return {
           ...rec,
           score: rec.score * boostFactor,
