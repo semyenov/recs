@@ -126,9 +126,9 @@ describe('AssociationRuleMiner', () => {
       const recommendations = miner.getFrequentlyBoughtWith('P001', rules, 2);
 
       expect(recommendations.length).toBe(2);
-      expect(recommendations[0].productId).toBe('P002');
+      expect(recommendations[0]._id).toBe('P002');
       expect(recommendations[0].score).toBeCloseTo(0.9, 2); // Uses confidence as score
-      expect(recommendations[1].productId).toBe('P003');
+      expect(recommendations[1]._id).toBe('P003');
       expect(recommendations[1].score).toBeCloseTo(0.8, 2);
     });
 

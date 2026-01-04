@@ -47,11 +47,11 @@ export class SimilarityCalculator {
     candidates: FeatureVector[],
     topN: number,
     minScore: number = 0
-  ): Array<{ productId: string; score: number }> {
+  ): Array<{ _id: string; score: number }> {
     const similarities = candidates
-      .filter((candidate) => candidate.productId !== target.productId)
+      .filter((candidate) => candidate._id !== target._id)
       .map((candidate) => ({
-        productId: candidate.productId,
+        _id: candidate._id,
         score: this.cosineSimilarity(target, candidate),
       }))
       .filter((item) => item.score >= minScore);
@@ -62,18 +62,18 @@ export class SimilarityCalculator {
 
   /**
    * Batch compute similarity matrix for all products
-   * Returns a map of productId -> list of similar products with scores
+   * Returns a map of _id -> list of similar products with scores
    */
   computeSimilarityMatrix(
     vectors: FeatureVector[],
     topN: number,
     minScore: number
-  ): Map<string, Array<{ productId: string; score: number }>> {
-    const matrix = new Map<string, Array<{ productId: string; score: number }>>();
+  ): Map<string, Array<{ _id: string; score: number }>> {
+    const matrix = new Map<string, Array<{ _id: string; score: number }>>();
 
     for (const vector of vectors) {
       const similar = this.findTopSimilar(vector, vectors, topN, minScore);
-      matrix.set(vector.productId, similar);
+      matrix.set(vector._id, similar);
     }
 
     return matrix;

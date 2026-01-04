@@ -3,76 +3,165 @@ import { Product, Order, Recommendation, CategoryStats } from '../types';
 import { logger } from '../config/logger';
 
 export class ProductRepository {
-  async findById(productId: string): Promise<Product | null> {
+  /**
+   * Find product by MongoDB _id
+   */
+  async findById(id: string): Promise<Product | null> {
     const db = mongoClient.getDb();
-    return await db.collection<Product>('products').findOne({ productId });
+    const product = await db.collection<Product>('products').findOne({ _id: id });
+    return product ? this.normalizeProduct(product) : null;
   }
 
+  /**
+   * Find products by category (supports both category and categoryId)
+   */
   async findByCategory(category: string): Promise<Product[]> {
     const db = mongoClient.getDb();
-    return await db.collection<Product>('products').find({ category }).toArray();
+    const products = await db
+      .collection<Product>('products')
+      .find({
+        $or: [{ category }, { categoryId: category }, { categoryName: category }],
+      })
+      .toArray();
+    return products.map((p) => this.normalizeProduct(p));
   }
 
+  /**
+   * Find products by brand
+   */
+  async findByBrand(brand: string): Promise<Product[]> {
+    const db = mongoClient.getDb();
+    const products = await db.collection<Product>('products').find({ brand }).toArray();
+    return products.map((p) => this.normalizeProduct(p));
+  }
+
+  /**
+   * Find all products with optional limit
+   */
   async findAll(limit?: number): Promise<Product[]> {
     const db = mongoClient.getDb();
     const query = db.collection<Product>('products').find();
     if (limit) {
       query.limit(limit);
     }
-    return await query.toArray();
+    const products = await query.toArray();
+    return products.map((p) => this.normalizeProduct(p));
   }
 
+  /**
+   * Create a new product
+   */
   async create(product: Product): Promise<void> {
     const db = mongoClient.getDb();
+    const normalized = this.normalizeProduct(product);
     await db.collection<Product>('products').insertOne({
-      ...product,
-      createdAt: new Date(),
+      ...normalized,
+      createdAt: normalized.createdAt || new Date(),
       updatedAt: new Date(),
     });
   }
 
-  async update(productId: string, updates: Partial<Product>): Promise<void> {
+  /**
+   * Update product by _id
+   */
+  async update(id: string, updates: Partial<Product>): Promise<void> {
     const db = mongoClient.getDb();
     await db
       .collection<Product>('products')
-      .updateOne({ productId }, { $set: { ...updates, updatedAt: new Date() } });
+      .updateOne({ _id: id }, { $set: { ...updates, updatedAt: new Date() } });
+  }
+
+  /**
+   * Normalize product (currently a no-op, kept for future extensibility)
+   */
+  private normalizeProduct(product: Product): Product {
+    return product;
   }
 
   async getCategoryStatistics(): Promise<Map<string, CategoryStats>> {
     const db = mongoClient.getDb();
-    const pipeline = [
-      {
-        $group: {
-          _id: '$category',
-          sizes: { $push: '$technicalProperties.size' },
-          prices: { $push: '$technicalProperties.price' },
-          weights: { $push: '$technicalProperties.weight' },
-          count: { $sum: 1 },
-        },
-      },
-    ];
+    // Get all products to compute statistics
+    const products = await db.collection<Product>('products').find().toArray();
 
-    const results = await db.collection<Product>('products').aggregate(pipeline).toArray();
+    const categoryData = new Map<
+      string,
+      {
+        sizes: number[];
+        prices: number[];
+        weights: number[];
+        count: number;
+      }
+    >();
+
+    for (const product of products) {
+      const normalized = this.normalizeProduct(product);
+      // Use categoryId, categoryName, or category as the key
+      const categoryKey =
+        normalized.categoryId || normalized.categoryName || normalized.category || 'unknown';
+
+      if (!categoryData.has(categoryKey)) {
+        categoryData.set(categoryKey, { sizes: [], prices: [], weights: [], count: 0 });
+      }
+
+      const data = categoryData.get(categoryKey)!;
+      data.count++;
+
+      // Extract numeric values from attributes
+      if (normalized.attributes) {
+        for (const [key, attr] of Object.entries(normalized.attributes)) {
+          const value = attr.value;
+          if (key.toLowerCase().includes('size') || key.toLowerCase().includes('вес')) {
+            if (typeof value === 'number') {
+              data.sizes.push(value);
+            } else if (typeof value === 'string') {
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue) && isFinite(numValue)) {
+                data.sizes.push(numValue);
+              }
+            }
+          }
+          if (key.toLowerCase().includes('weight') || key.toLowerCase().includes('масс')) {
+            if (typeof value === 'number') {
+              data.weights.push(value);
+            } else if (typeof value === 'string') {
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue) && isFinite(numValue)) {
+                data.weights.push(numValue);
+              }
+            }
+          }
+        }
+      }
+
+      // Extract price from prices object (use first non-zero price)
+      if (normalized.prices) {
+        const priceValues: number[] = [];
+        for (const p of Object.values(normalized.prices)) {
+          if (typeof p === 'number' && p > 0) {
+            priceValues.push(p);
+          }
+        }
+        if (priceValues.length > 0) {
+          data.prices.push(Math.min(...priceValues)); // Use minimum price
+        }
+      }
+    }
 
     const statsMap = new Map<string, CategoryStats>();
 
-    for (const result of results) {
-      const sizes = result.sizes.filter((v: unknown) => typeof v === 'number') as number[];
-      const prices = result.prices.filter((v: unknown) => typeof v === 'number') as number[];
-      const weights = result.weights.filter((v: unknown) => typeof v === 'number') as number[];
-
-      statsMap.set(result._id as string, {
-        category: result._id as string,
+    for (const [category, data] of categoryData.entries()) {
+      statsMap.set(category, {
+        category,
         medians: {
-          size: this.calculateMedian(sizes),
-          price: this.calculateMedian(prices),
-          weight: this.calculateMedian(weights),
+          size: this.calculateMedian(data.sizes),
+          price: this.calculateMedian(data.prices),
+          weight: this.calculateMedian(data.weights),
         },
         counts: {
-          total: result.count as number,
-          withSize: sizes.length,
-          withPrice: prices.length,
-          withWeight: weights.length,
+          total: data.count,
+          withSize: data.sizes.length,
+          withPrice: data.prices.length,
+          withWeight: data.weights.length,
         },
         lastUpdated: new Date(),
       });

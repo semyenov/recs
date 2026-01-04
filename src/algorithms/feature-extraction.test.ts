@@ -23,13 +23,12 @@ describe('FeatureExtractor', () => {
   it('should extract features with all properties present', () => {
     const product: Product = {
       _id: '1',
-      productId: 'P001',
       name: 'Test Product',
       category: 'electronics',
-      technicalProperties: {
-        size: 15,
-        price: 150,
-        weight: 3,
+      attributes: {
+        size: { name: 'Size', value: 15 },
+        price: { name: 'Price', value: 150 },
+        weight: { name: 'Weight', value: 3 },
       },
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -37,7 +36,7 @@ describe('FeatureExtractor', () => {
 
     const vector = extractor.extractFeatures(product);
 
-    expect(vector.productId).toBe('P001');
+    expect(vector._id).toBe('1');
     // Features are sorted alphabetically: price, size, weight
     expect(vector.features).toEqual([150, 15, 3]);
     expect(vector.presenceIndicators).toEqual([1, 1, 1]);
@@ -47,11 +46,10 @@ describe('FeatureExtractor', () => {
   it('should impute missing features with median', () => {
     const product: Product = {
       _id: '2',
-      productId: 'P002',
       name: 'Test Product',
       category: 'electronics',
-      technicalProperties: {
-        size: 15,
+      attributes: {
+        size: { name: 'Size', value: 15 },
         // price and weight missing
       },
       createdAt: new Date(),
@@ -70,19 +68,25 @@ describe('FeatureExtractor', () => {
     const products: Product[] = [
       {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: { size: 10, price: 100, weight: 1 },
+        attributes: {
+          size: { name: 'Size', value: 10 },
+          price: { name: 'Price', value: 100 },
+          weight: { name: 'Weight', value: 1 },
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       },
       {
         _id: '2',
-        productId: 'P002',
         name: 'Product 2',
         category: 'electronics',
-        technicalProperties: { size: 20, price: 200, weight: 3 },
+        attributes: {
+          size: { name: 'Size', value: 20 },
+          price: { name: 'Price', value: 200 },
+          weight: { name: 'Weight', value: 3 },
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -121,17 +125,16 @@ describe('FeatureExtractor', () => {
 
     const product: Product = {
       _id: '3',
-      productId: 'P003',
       name: 'Test Product',
       category: 'electronics',
-      technicalProperties: {
-        price: 150,
-        size: 15,
-        weight: 3,
-        height: 6,
-        width: 10,
+      attributes: {
+        price: { name: 'Price', value: 150 },
+        size: { name: 'Size', value: 15 },
+        weight: { name: 'Weight', value: 3 },
+        height: { name: 'Height', value: 6 },
+        width: { name: 'Width', value: 10 },
         // Add a non-numeric property that should be ignored
-        color: 'red',
+        color: { name: 'Color', value: 'red' },
       },
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -160,19 +163,25 @@ describe('FeatureExtractor', () => {
     const products: Product[] = [
       {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: { price: 100, size: 10, weight: 2 },
+        attributes: {
+          price: { name: 'Price', value: 100 },
+          size: { name: 'Size', value: 10 },
+          weight: { name: 'Weight', value: 2 },
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       },
       {
         _id: '2',
-        productId: 'P002',
         name: 'Product 2',
         category: 'electronics',
-        technicalProperties: { price: 200, size: 20, volume: 100 }, // volume instead of weight
+        attributes: {
+          price: { name: 'Price', value: 200 },
+          size: { name: 'Size', value: 20 },
+          volume: { name: 'Volume', value: 100 },
+        }, // volume instead of weight
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -194,29 +203,27 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: {
-            price: 100,
-            size: 10,
-            weight: 2,
-            height: 5,
-            color: 'red', // non-numeric, should be ignored
-            material: 'plastic', // non-numeric, should be ignored
+          attributes: {
+            price: { name: 'Price', value: 100 },
+            size: { name: 'Size', value: 10 },
+            weight: { name: 'Weight', value: 2 },
+            height: { name: 'Height', value: 5 },
+            color: { name: 'Color', value: 'red' }, // non-numeric, should be ignored
+            material: { name: 'Material', value: 'plastic' }, // non-numeric, should be ignored
           },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
         {
           _id: '2',
-          productId: 'P002',
           name: 'Product 2',
           category: 'electronics',
-          technicalProperties: {
-            price: 200,
-            width: 8,
-            depth: 3,
+          attributes: {
+            price: { name: 'Price', value: 200 },
+            width: { name: 'Width', value: 8 },
+            depth: { name: 'Depth', value: 3 },
           },
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -235,13 +242,12 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: {
-            color: 'red',
-            material: 'plastic',
-            category: 'electronics',
+          attributes: {
+            color: { name: 'Color', value: 'red' },
+            material: { name: 'Material', value: 'plastic' },
+            category: { name: 'Category', value: 'electronics' },
           },
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -263,15 +269,14 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: {
-            price: 100,
-            size: NaN,
-            weight: Infinity,
-            height: -Infinity,
-            width: 10, // valid number
+          attributes: {
+            price: { name: 'Price', value: 100 },
+            size: { name: 'Size', value: NaN },
+            weight: { name: 'Weight', value: Infinity },
+            height: { name: 'Height', value: -Infinity },
+            width: { name: 'Width', value: 10 }, // valid number
           },
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -300,14 +305,13 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: 150,
-          size: 15,
-          weight: 3,
-          height: 6, // should be ignored since not in feature keys
+        attributes: {
+          price: { name: 'Price', value: 150 },
+          size: { name: 'Size', value: 15 },
+          weight: { name: 'Weight', value: 3 },
+          height: { name: 'Height', value: 6 }, // should be ignored since not in feature keys
         },
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -334,10 +338,13 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: { price: 150, size: 15, weight: 3 },
+        attributes: {
+          price: { name: 'Price', value: 150 },
+          size: { name: 'Size', value: 15 },
+          weight: { name: 'Weight', value: 3 },
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -353,10 +360,9 @@ describe('FeatureExtractor', () => {
       const extractor10 = new FeatureExtractor();
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: { price: 100 },
+        attributes: { price: { name: 'Price', value: 100 } },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -379,10 +385,9 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'clothing', // category not in stats
-        technicalProperties: { price: 150 },
+        attributes: { price: { name: 'Price', value: 150 } },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -408,10 +413,12 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: { price: 100, size: 10 },
+          attributes: {
+            price: { name: 'Price', value: 100 },
+            size: { name: 'Size', value: 10 },
+          },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -438,19 +445,17 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: { price: 100 },
+          attributes: { price: { name: 'Price', value: 100 } },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
         {
           _id: '2',
-          productId: 'P002',
           name: 'Product 2',
           category: 'electronics',
-          technicalProperties: { price: 100 }, // same value
+          attributes: { price: { name: 'Price', value: 100 } }, // same value
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -489,11 +494,10 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: 150,
+        attributes: {
+          price: { name: 'Price', value: 150 },
           // size, weight, height missing - should use medians
         },
         createdAt: new Date(),
@@ -524,11 +528,10 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: 150,
+        attributes: {
+          price: { name: 'Price', value: 150 },
           // size and weight missing
         },
         createdAt: new Date(),
@@ -556,12 +559,11 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: 150,
-          size: undefined as unknown as number,
+        attributes: {
+          price: { name: 'Price', value: 150 },
+          size: { name: 'Size', value: undefined as unknown as number },
         },
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -585,11 +587,10 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: null as unknown as number,
+        attributes: {
+          price: { name: 'Price', value: null as unknown as number },
         },
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -616,19 +617,23 @@ describe('FeatureExtractor', () => {
       const products: Product[] = [
         {
           _id: '1',
-          productId: 'P001',
           name: 'Product 1',
           category: 'electronics',
-          technicalProperties: { price: 150, size: 15 },
+          attributes: {
+            price: { name: 'Price', value: 150 },
+            size: { name: 'Size', value: 15 },
+          },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
         {
           _id: '2',
-          productId: 'P002',
           name: 'Product 2',
           category: 'electronics',
-          technicalProperties: { weight: 3, height: 6 },
+          attributes: {
+            weight: { name: 'Weight', value: 3 },
+            height: { name: 'Height', value: 6 },
+          },
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -654,12 +659,11 @@ describe('FeatureExtractor', () => {
 
       const product: Product = {
         _id: '1',
-        productId: 'P001',
         name: 'Product 1',
         category: 'electronics',
-        technicalProperties: {
-          price: 0, // zero is a valid number
-          size: 0,
+        attributes: {
+          price: { name: 'Price', value: 0 }, // zero is a valid number
+          size: { name: 'Size', value: 0 },
         },
         createdAt: new Date(),
         updatedAt: new Date(),

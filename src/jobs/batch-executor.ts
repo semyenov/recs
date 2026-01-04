@@ -58,7 +58,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'content-based',
           recommendations: similar.map((s) => ({
-            productId: s.productId,
+            productId: s._id,
             score: s.score,
             breakdown: {
               contentBased: s.score,
@@ -122,7 +122,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'collaborative',
           recommendations: topN.map((s) => ({
-            productId: s.productId,
+            productId: s._id,
             score: s.score,
             breakdown: {
               collaborative: s.score,
@@ -248,7 +248,7 @@ export class BatchExecutor {
     const uniqueProducts = new Set<string>();
     for (const rec of recommendations) {
       for (const r of rec.recommendations) {
-        uniqueProducts.add(r.productId);
+        uniqueProducts.add(r._id);
       }
     }
     const diversityScore = uniqueProducts.size / totalRecs;
@@ -310,9 +310,9 @@ export class BatchExecutor {
     const products = await this.productRepo.findAll(100);
 
     for (const product of products) {
-      const recs = await this.recommendationRepo.findByProductId(product.productId, version);
+      const recs = await this.recommendationRepo.findByProductId(product._id, version);
       if (recs) {
-        await redisClient.set(`recs:${product.productId}:${version}`, recs, 14400); // 4h TTL
+        await redisClient.set(`recs:${product._id}:${version}`, recs, 14400); // 4h TTL
       }
     }
 

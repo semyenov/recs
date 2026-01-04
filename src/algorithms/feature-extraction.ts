@@ -20,10 +20,22 @@ export class FeatureExtractor {
     const numericKeys = new Set<string>();
 
     for (const product of products) {
-      for (const [key, value] of Object.entries(product.technicalProperties)) {
-        // Skip non-numeric values and special keys
-        if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
-          numericKeys.add(key);
+      // Check attributes structure
+      if (product.attributes) {
+        for (const [key, attr] of Object.entries(product.attributes)) {
+          const value = attr.value;
+          if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+            numericKeys.add(key);
+          } else if (typeof value === 'boolean') {
+            // Convert boolean to numeric feature
+            numericKeys.add(key);
+          } else if (typeof value === 'string') {
+            // Try to parse numeric strings
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue) && isFinite(numValue)) {
+              numericKeys.add(key);
+            }
+          }
         }
       }
     }
@@ -72,28 +84,38 @@ export class FeatureExtractor {
       throw new Error('Category statistics not loaded. Call setCategoryStatistics first.');
     }
 
-    const stats = this.categoryStats.get(product.category);
+    const categoryKey = product.category || product.categoryId || product.categoryName || 'unknown';
+    const stats = this.categoryStats.get(categoryKey);
     if (!stats) {
-      logger.warn(`No category statistics found for category: ${product.category}`);
+      logger.warn(`No category statistics found for category: ${categoryKey}`);
     }
-
-    const props = product.technicalProperties;
 
     // Get feature keys, discovering from stats if needed
     let featureKeys = this.getFeatureKeys(stats);
 
     // If still no keys, discover from this product
     if (featureKeys.length === 0) {
-      featureKeys = Object.keys(props)
-        .filter((key) => {
-          const value = props[key];
-          return typeof value === 'number' && !isNaN(value) && isFinite(value);
-        })
-        .sort();
+      const discoveredKeys: string[] = [];
+
+      // Check attributes
+      if (product.attributes) {
+        for (const [key, attr] of Object.entries(product.attributes)) {
+          const value = attr.value;
+          if (
+            typeof value === 'number' ||
+            typeof value === 'boolean' ||
+            (typeof value === 'string' && !isNaN(parseFloat(value)) && isFinite(parseFloat(value)))
+          ) {
+            discoveredKeys.push(key);
+          }
+        }
+      }
+
+      featureKeys = [...new Set(discoveredKeys)].sort();
       this.featureKeys = featureKeys;
       if (featureKeys.length > 0) {
         logger.info(
-          `Discovered feature keys from product ${product.productId}: ${featureKeys.join(', ')}`
+          `Discovered feature keys from product ${product._id}: ${featureKeys.join(', ')}`
         );
       }
     }
@@ -103,8 +125,24 @@ export class FeatureExtractor {
     const presenceIndicators: number[] = [];
 
     for (const key of featureKeys) {
-      const value = props[key];
-      if (value !== undefined && typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+      let value: number | undefined;
+
+      // Extract from attributes
+      if (product.attributes && product.attributes[key]) {
+        const attrValue = product.attributes[key].value;
+        if (typeof attrValue === 'number') {
+          value = attrValue;
+        } else if (typeof attrValue === 'boolean') {
+          value = attrValue ? 1 : 0;
+        } else if (typeof attrValue === 'string') {
+          const numValue = parseFloat(attrValue);
+          if (!isNaN(numValue) && isFinite(numValue)) {
+            value = numValue;
+          }
+        }
+      }
+
+      if (value !== undefined) {
         features.push(value);
         presenceIndicators.push(1);
       } else {
@@ -116,7 +154,7 @@ export class FeatureExtractor {
     }
 
     return {
-      productId: product.productId,
+      _id: product._id,
       features,
       presenceIndicators,
       normalized: false,

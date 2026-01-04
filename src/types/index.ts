@@ -1,44 +1,104 @@
 // Product Types
-export interface TechnicalProperties {
-  size?: number;
-  price?: number;
-  weight?: number;
-  category?: string;
-  color?: string;
-  material?: string;
-  [key: string]: unknown;
+// Product attribute structure from actual data
+export interface ProductAttribute {
+  name: string;
+  value: string | number | boolean;
 }
 
+export interface ProductAttributes {
+  [key: string]: ProductAttribute;
+}
+
+export interface ProductPrices {
+  [storeId: string]: number;
+}
+
+export interface ProductImages {
+  [key: string]: string;
+}
+
+export interface ProductStocks {
+  [storeId: string]: number;
+}
+
+export interface ProductDeliveryDays {
+  [storeId: string]: [number, number];
+}
+
+// Extended Product interface matching actual data structure
 export interface Product {
   _id: string;
-  productId: string;
-  name: string;
+  name?: string;
+  fullName?: string;
+  yandexName?: string;
+  brand?: string;
+  model?: string;
+  code?: string;
   category: string;
-  technicalProperties: TechnicalProperties;
-  createdAt: Date;
-  updatedAt: Date;
+  categoryId?: string;
+  categoryName?: string;
+  categories?: string[];
+  family?: string;
+  description?: string;
+  attributes?: ProductAttributes;
+  images?: ProductImages;
+  prices?: ProductPrices;
+  oldPrices?: {
+    prices: ProductPrices;
+    date: Date;
+  };
+  stocks?: ProductStocks;
+  stocksSummary?: string;
+  DeliveryDays?: ProductDeliveryDays;
+  DeliveryMinMax?: {
+    min: number;
+    max: number;
+  };
+  enabled?: boolean;
+  box?: number;
+  collections?: string[];
+  hash?: string;
+  updated?: string | Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // Order Types
-export interface OrderItem {
-  productId: string;
-  quantity: number;
+export interface ProductInOrder {
+  name: string;
   price: number;
+  quantity: number;
+  status: string;
 }
 
 export interface Order {
   _id: string;
-  orderId: string;
-  userId: string;
-  items: OrderItem[];
-  totalAmount: number;
-  orderDate: Date;
-  createdAt: Date;
+  number?: string;
+  name?: string;
+  contragent?: string;
+  contragentId: string;
+  manager?: string;
+  managerId?: string;
+  products: { [productId: string]: ProductInOrder };
+  summary: number;
+  date?: Date | { $date: string };
+  createdDate?: Date | { $date: string };
+  saleDate?: Date | { $date: string };
+  status?: string;
+  posted?: boolean;
+  deleted?: boolean;
+  enabled?: boolean;
+  size?: number;
+  timestamp?: number;
+  ref?: string;
+  dataVersion?: string;
+  createdAt?: Date;
+  __v?: number;
 }
 
 // Recommendation Types
 export interface RecommendationScore {
-  productId: string;
+  _id: string;
   score: number;
   breakdown: ScoreBreakdown;
 }
@@ -57,7 +117,7 @@ export interface ScoreBreakdown {
 
 export interface Recommendation {
   _id?: string;
-  productId: string;
+  productId: string; // This is the _id of the product for which recommendations are generated (kept for backward compatibility with existing data)
   algorithmType: 'content-based' | 'collaborative' | 'association' | 'hybrid';
   recommendations: RecommendationScore[];
   version: string;
@@ -72,7 +132,7 @@ export interface Recommendation {
 
 // Feature Vector Types
 export interface FeatureVector {
-  productId: string;
+  _id: string;
   features: number[];
   presenceIndicators: number[];
   normalized: boolean;

@@ -1,13 +1,21 @@
 import { z } from 'zod';
 
 // Product Validation
-export const technicalPropertiesSchema = z.record(z.unknown()).optional();
+export const productAttributeSchema = z.object({
+  name: z.string(),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+});
+
+export const productAttributesSchema = z.record(productAttributeSchema).optional();
 
 export const productSchema = z.object({
-  productId: z.string().min(1),
-  name: z.string().min(1),
-  category: z.string().min(1),
-  technicalProperties: technicalPropertiesSchema.default({}),
+  _id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  fullName: z.string().optional(),
+  category: z.string().optional(),
+  categoryId: z.string().optional(),
+  categoryName: z.string().optional(),
+  attributes: productAttributesSchema,
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 });

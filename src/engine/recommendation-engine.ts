@@ -12,9 +12,9 @@ export class RecommendationEngine {
    * Blend recommendations from multiple algorithms using weighted linear combination
    */
   blendRecommendations(
-    contentBased: Array<{ productId: string; score: number }>,
-    collaborative: Array<{ productId: string; score: number }>,
-    association: Array<{ productId: string; score: number }>,
+    contentBased: Array<{ _id: string; score: number }>,
+    collaborative: Array<{ _id: string; score: number }>,
+    association: Array<{ _id: string; score: number }>,
     weights: HybridWeights,
     topN: number
   ): RecommendationScore[] {
@@ -22,56 +22,56 @@ export class RecommendationEngine {
     const candidateScores = new Map<string, ScoreBreakdown>();
 
     // Add content-based scores
-    for (const { productId, score } of contentBased) {
-      if (!candidateScores.has(productId)) {
-        candidateScores.set(productId, {
+    for (const { _id, score } of contentBased) {
+      if (!candidateScores.has(_id)) {
+        candidateScores.set(_id, {
           blendedScore: 0,
           weights,
         });
       }
-      const breakdown = candidateScores.get(productId)!;
+      const breakdown = candidateScores.get(_id)!;
       breakdown.contentBased = score;
     }
 
     // Add collaborative scores
-    for (const { productId, score } of collaborative) {
-      if (!candidateScores.has(productId)) {
-        candidateScores.set(productId, {
+    for (const { _id, score } of collaborative) {
+      if (!candidateScores.has(_id)) {
+        candidateScores.set(_id, {
           blendedScore: 0,
           weights,
         });
       }
-      const breakdown = candidateScores.get(productId)!;
+      const breakdown = candidateScores.get(_id)!;
       breakdown.collaborative = score;
     }
 
     // Add association scores
-    for (const { productId, score } of association) {
-      if (!candidateScores.has(productId)) {
-        candidateScores.set(productId, {
+    for (const { _id, score } of association) {
+      if (!candidateScores.has(_id)) {
+        candidateScores.set(_id, {
           blendedScore: 0,
           weights,
         });
       }
-      const breakdown = candidateScores.get(productId)!;
+      const breakdown = candidateScores.get(_id)!;
       breakdown.association = score;
     }
 
     // Calculate blended scores
-    for (const [productId, breakdown] of candidateScores) {
+    for (const [_id, breakdown] of candidateScores) {
       const contentScore = (breakdown.contentBased || 0) * weights.contentBased;
       const collabScore = (breakdown.collaborative || 0) * weights.collaborative;
       const assocScore = (breakdown.association || 0) * weights.association;
 
       breakdown.blendedScore = contentScore + collabScore + assocScore;
 
-      candidateScores.set(productId, breakdown);
+      candidateScores.set(_id, breakdown);
     }
 
     // Sort by blended score and filter by threshold
     const recommendations: RecommendationScore[] = Array.from(candidateScores.entries())
-      .map(([productId, breakdown]) => ({
-        productId,
+      .map(([_id, breakdown]) => ({
+        _id,
         score: breakdown.blendedScore,
         breakdown,
       }))
@@ -192,7 +192,7 @@ export class RecommendationEngine {
     boostFactor: number = 1.2
   ): RecommendationScore[] {
     return recommendations.map((rec) => {
-      if (newProductIds.has(rec.productId)) {
+      if (newProductIds.has(rec._id)) {
         return {
           ...rec,
           score: rec.score * boostFactor,

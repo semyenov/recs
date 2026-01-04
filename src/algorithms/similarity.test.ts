@@ -11,14 +11,14 @@ describe('SimilarityCalculator', () => {
 
   it('should calculate cosine similarity correctly', () => {
     const vectorA: FeatureVector = {
-      productId: 'P001',
+      _id: 'P001',
       features: [1, 0, 0],
       presenceIndicators: [1, 1, 1],
       normalized: true,
     };
 
     const vectorB: FeatureVector = {
-      productId: 'P002',
+      _id: 'P002',
       features: [1, 0, 0],
       presenceIndicators: [1, 1, 1],
       normalized: true,
@@ -31,14 +31,14 @@ describe('SimilarityCalculator', () => {
 
   it('should return 0 for orthogonal vectors', () => {
     const vectorA: FeatureVector = {
-      productId: 'P001',
+      _id: 'P001',
       features: [1, 0],
       presenceIndicators: [1, 1],
       normalized: true,
     };
 
     const vectorB: FeatureVector = {
-      productId: 'P002',
+      _id: 'P002',
       features: [0, 1],
       presenceIndicators: [1, 1],
       normalized: true,
@@ -51,7 +51,7 @@ describe('SimilarityCalculator', () => {
 
   it('should find top N similar products', () => {
     const target: FeatureVector = {
-      productId: 'P001',
+      _id: 'P001',
       features: [1, 0, 0],
       presenceIndicators: [1, 1, 1],
       normalized: true,
@@ -59,19 +59,19 @@ describe('SimilarityCalculator', () => {
 
     const candidates: FeatureVector[] = [
       {
-        productId: 'P002',
+        _id: 'P002',
         features: [0.9, 0.1, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       },
       {
-        productId: 'P003',
+        _id: 'P003',
         features: [0, 1, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       },
       {
-        productId: 'P004',
+        _id: 'P004',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -81,13 +81,13 @@ describe('SimilarityCalculator', () => {
     const topSimilar = calculator.findTopSimilar(target, candidates, 2);
 
     expect(topSimilar).toHaveLength(2);
-    expect(topSimilar[0].productId).toBe('P004'); // Most similar
+    expect(topSimilar[0]._id).toBe('P004'); // Most similar
     expect(topSimilar[0].score).toBeGreaterThan(0.9);
   });
 
   it('should filter by minimum score', () => {
     const target: FeatureVector = {
-      productId: 'P001',
+      _id: 'P001',
       features: [1, 0, 0],
       presenceIndicators: [1, 1, 1],
       normalized: true,
@@ -95,7 +95,7 @@ describe('SimilarityCalculator', () => {
 
     const candidates: FeatureVector[] = [
       {
-        productId: 'P002',
+        _id: 'P002',
         features: [0.5, 0.5, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -110,14 +110,14 @@ describe('SimilarityCalculator', () => {
   describe('cosineSimilarity edge cases', () => {
     it('should throw error for vectors with different lengths', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [1, 0],
         presenceIndicators: [1, 1],
         normalized: true,
@@ -130,14 +130,14 @@ describe('SimilarityCalculator', () => {
 
     it('should handle zero vectors', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [0, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -149,14 +149,14 @@ describe('SimilarityCalculator', () => {
 
     it('should handle negative values and clamp to 0-1 range', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [-1, 0, 0], // Opposite direction
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -170,14 +170,14 @@ describe('SimilarityCalculator', () => {
 
     it('should calculate similarity for high-dimensional vectors', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 2, 3, 4, 5],
         presenceIndicators: [1, 1, 1, 1, 1],
         normalized: false,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [1, 2, 3, 4, 5],
         presenceIndicators: [1, 1, 1, 1, 1],
         normalized: false,
@@ -189,14 +189,14 @@ describe('SimilarityCalculator', () => {
 
     it('should handle partially similar vectors', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 1, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -210,14 +210,14 @@ describe('SimilarityCalculator', () => {
 
     it('should handle vectors with decimal values', () => {
       const vectorA: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [0.5, 0.3, 0.2],
         presenceIndicators: [1, 1, 1],
         normalized: true,
       };
 
       const vectorB: FeatureVector = {
-        productId: 'P002',
+        _id: 'P002',
         features: [0.4, 0.3, 0.3],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -232,7 +232,7 @@ describe('SimilarityCalculator', () => {
   describe('findTopSimilar edge cases', () => {
     it('should exclude target product from results', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -241,7 +241,7 @@ describe('SimilarityCalculator', () => {
       const candidates: FeatureVector[] = [
         target, // Target itself
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -250,13 +250,13 @@ describe('SimilarityCalculator', () => {
 
       const topSimilar = calculator.findTopSimilar(target, candidates, 10);
       expect(topSimilar).toHaveLength(1);
-      expect(topSimilar[0].productId).toBe('P002');
-      expect(topSimilar.every((item) => item.productId !== target.productId)).toBe(true);
+      expect(topSimilar[0]._id).toBe('P002');
+      expect(topSimilar.every((item) => item._id !== target._id)).toBe(true);
     });
 
     it('should handle empty candidates array', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -268,7 +268,7 @@ describe('SimilarityCalculator', () => {
 
     it('should handle topN larger than available candidates', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -276,7 +276,7 @@ describe('SimilarityCalculator', () => {
 
       const candidates: FeatureVector[] = [
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -289,7 +289,7 @@ describe('SimilarityCalculator', () => {
 
     it('should sort results by score descending', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -297,19 +297,19 @@ describe('SimilarityCalculator', () => {
 
       const candidates: FeatureVector[] = [
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.5, 0.5, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P004',
+          _id: 'P004',
           features: [0.7, 0.3, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -326,7 +326,7 @@ describe('SimilarityCalculator', () => {
 
     it('should handle minScore of 0 (no filtering)', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -334,7 +334,7 @@ describe('SimilarityCalculator', () => {
 
       const candidates: FeatureVector[] = [
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.1, 0.9, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -347,7 +347,7 @@ describe('SimilarityCalculator', () => {
 
     it('should handle minScore of 1 (very strict)', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -355,13 +355,13 @@ describe('SimilarityCalculator', () => {
 
       const candidates: FeatureVector[] = [
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [1, 0, 0], // Identical
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -375,7 +375,7 @@ describe('SimilarityCalculator', () => {
 
     it('should handle topN of 0', () => {
       const target: FeatureVector = {
-        productId: 'P001',
+        _id: 'P001',
         features: [1, 0, 0],
         presenceIndicators: [1, 1, 1],
         normalized: true,
@@ -383,7 +383,7 @@ describe('SimilarityCalculator', () => {
 
       const candidates: FeatureVector[] = [
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -399,19 +399,19 @@ describe('SimilarityCalculator', () => {
     it('should compute similarity matrix for all vectors', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [0, 1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -429,25 +429,25 @@ describe('SimilarityCalculator', () => {
     it('should respect topN parameter', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [0.8, 0.2, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P004',
+          _id: 'P004',
           features: [0.7, 0.3, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -465,19 +465,19 @@ describe('SimilarityCalculator', () => {
     it('should respect minScore parameter', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.1, 0.9, 0], // Low similarity
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [0.9, 0.1, 0], // High similarity
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -488,8 +488,8 @@ describe('SimilarityCalculator', () => {
 
       // P001 should only have P003 (high similarity), not P002 (low similarity)
       const p001Similar = matrix.get('P001') || [];
-      const p002InResults = p001Similar.some((item) => item.productId === 'P002');
-      const p003InResults = p001Similar.some((item) => item.productId === 'P003');
+      const p002InResults = p001Similar.some((item) => item._id === 'P002');
+      const p003InResults = p001Similar.some((item) => item._id === 'P003');
 
       expect(p002InResults).toBe(false);
       expect(p003InResults).toBe(true);
@@ -503,7 +503,7 @@ describe('SimilarityCalculator', () => {
     it('should handle single vector', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -518,13 +518,13 @@ describe('SimilarityCalculator', () => {
     it('should exclude self from similarity results', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [0.9, 0.1, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -534,25 +534,25 @@ describe('SimilarityCalculator', () => {
       const matrix = calculator.computeSimilarityMatrix(vectors, 10, 0);
 
       const p001Similar = matrix.get('P001') || [];
-      expect(p001Similar.every((item) => item.productId !== 'P001')).toBe(true);
+      expect(p001Similar.every((item) => item._id !== 'P001')).toBe(true);
     });
 
     it('should compute correct similarity scores in matrix', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0, 0],
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [1, 0, 0], // Identical to P001
           presenceIndicators: [1, 1, 1],
           normalized: true,
         },
         {
-          productId: 'P003',
+          _id: 'P003',
           features: [0, 1, 0], // Orthogonal
           presenceIndicators: [1, 1, 1],
           normalized: true,
@@ -562,8 +562,8 @@ describe('SimilarityCalculator', () => {
       const matrix = calculator.computeSimilarityMatrix(vectors, 10, 0);
 
       const p001Similar = matrix.get('P001') || [];
-      const p002Entry = p001Similar.find((item) => item.productId === 'P002');
-      const p003Entry = p001Similar.find((item) => item.productId === 'P003');
+      const p002Entry = p001Similar.find((item) => item._id === 'P002');
+      const p003Entry = p001Similar.find((item) => item._id === 'P003');
 
       expect(p002Entry).toBeDefined();
       expect(p002Entry?.score).toBeCloseTo(1.0, 2);
@@ -574,13 +574,13 @@ describe('SimilarityCalculator', () => {
     it('should handle vectors with different feature counts gracefully', () => {
       const vectors: FeatureVector[] = [
         {
-          productId: 'P001',
+          _id: 'P001',
           features: [1, 0],
           presenceIndicators: [1, 1],
           normalized: true,
         },
         {
-          productId: 'P002',
+          _id: 'P002',
           features: [1, 0, 0], // Different length
           presenceIndicators: [1, 1, 1],
           normalized: true,

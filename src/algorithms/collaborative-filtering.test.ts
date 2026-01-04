@@ -46,7 +46,7 @@ describe('CollaborativeFilter', () => {
 
       const p001Similar = similarities.get('P001');
       expect(p001Similar).toBeDefined();
-      expect(p001Similar![0].productId).toBe('P002');
+      expect(p001Similar![0]._id).toBe('P002');
       expect(p001Similar![0].score).toBeCloseTo(1.0, 1); // High Jaccard similarity
     });
 
@@ -125,7 +125,7 @@ describe('CollaborativeFilter', () => {
       // P001 and P002 share 1 user out of 2 total = 0.5 Jaccard
       const p001Similar = similarities.get('P001');
       expect(p001Similar).toBeDefined();
-      const p002Entry = p001Similar!.find((s) => s.productId === 'P002');
+      const p002Entry = p001Similar!.find((s) => s._id === 'P002');
       expect(p002Entry).toBeDefined();
       expect(p002Entry!.score).toBeCloseTo(0.33, 1); // 1 shared / 3 total users
     });
@@ -167,7 +167,7 @@ describe('CollaborativeFilter', () => {
       const recommendations = cf.getUserRecommendations('U001', orders, similarities, 10);
 
       expect(recommendations.length).toBeGreaterThan(0);
-      expect(recommendations[0].productId).toBe('P002'); // Should recommend P002
+      expect(recommendations[0]._id).toBe('P002'); // Should recommend P002
       expect(recommendations[0].score).toBeGreaterThan(0);
     });
 
@@ -187,9 +187,9 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = new Map<string, Array<{ productId: string; score: number }>>();
-      similarities.set('P001', [{ productId: 'P002', score: 0.9 }]);
-      similarities.set('P002', [{ productId: 'P001', score: 0.9 }]);
+      const similarities = new Map<string, Array<{ _id: string; score: number }>>();
+      similarities.set('P001', [{ _id: 'P002', score: 0.9 }]);
+      similarities.set('P002', [{ _id: 'P001', score: 0.9 }]);
 
       const recommendations = cf.getUserRecommendations('U001', orders, similarities, 10);
 
@@ -198,7 +198,7 @@ describe('CollaborativeFilter', () => {
 
     it('should return empty array for user with no purchase history', () => {
       const orders: Order[] = [];
-      const similarities = new Map<string, Array<{ productId: string; score: number }>>();
+      const similarities = new Map<string, Array<{ _id: string; score: number }>>();
 
       const recommendations = cf.getUserRecommendations('U999', orders, similarities, 10);
 
@@ -218,11 +218,11 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = new Map<string, Array<{ productId: string; score: number }>>();
+      const similarities = new Map<string, Array<{ _id: string; score: number }>>();
       similarities.set('P001', [
-        { productId: 'P002', score: 0.9 },
-        { productId: 'P003', score: 0.8 },
-        { productId: 'P004', score: 0.7 },
+        { _id: 'P002', score: 0.9 },
+        { _id: 'P003', score: 0.8 },
+        { _id: 'P004', score: 0.7 },
       ]);
 
       const recommendations = cf.getUserRecommendations('U001', orders, similarities, 2);
@@ -247,14 +247,14 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = new Map<string, Array<{ productId: string; score: number }>>();
-      similarities.set('P001', [{ productId: 'P003', score: 0.8 }]);
-      similarities.set('P002', [{ productId: 'P003', score: 0.6 }]);
+      const similarities = new Map<string, Array<{ _id: string; score: number }>>();
+      similarities.set('P001', [{ _id: 'P003', score: 0.8 }]);
+      similarities.set('P002', [{ _id: 'P003', score: 0.6 }]);
 
       const recommendations = cf.getUserRecommendations('U001', orders, similarities, 10);
 
       // Score should be (0.8 + 0.6) / 2 = 0.7
-      expect(recommendations[0].productId).toBe('P003');
+      expect(recommendations[0]._id).toBe('P003');
       expect(recommendations[0].score).toBeCloseTo(0.7, 2);
     });
   });

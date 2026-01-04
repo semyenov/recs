@@ -66,11 +66,11 @@ export class AssociationRuleMiner {
     productId: string,
     rules: Map<string, AssociationRule[]>,
     topN: number
-  ): Array<{ productId: string; score: number }> {
+  ): Array<{ _id: string; score: number }> {
     const productRules = rules.get(productId) || [];
 
     return productRules.slice(0, topN).map((rule) => ({
-      productId: rule.consequent,
+      _id: rule.consequent,
       score: rule.confidence, // Use confidence as score
     }));
   }

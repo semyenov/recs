@@ -46,7 +46,7 @@ router.get('/products/:productId/similar', async (req, res, next) => {
         recommendations: dbRec.recommendations
           .slice(query.offset, query.offset + query.limit)
           .map((r, idx) => ({
-            productId: r.productId,
+            productId: r._id,
             score: r.score,
             rank: query.offset + idx + 1,
           })),
@@ -100,7 +100,7 @@ router.get('/products/:productId/frequently-bought-with', async (req, res, next)
       recommendations: dbRec.recommendations
         .slice(query.offset, query.offset + query.limit)
         .map((r, idx) => ({
-          productId: r.productId,
+          productId: r._id,
           score: r.score,
           rank: query.offset + idx + 1,
         })),
@@ -177,7 +177,7 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
       recommendations: dbRec.recommendations
         .slice(query.offset, query.offset + query.limit)
         .map((r, idx) => ({
-          productId: r.productId,
+          productId: r._id,
           score: r.score,
           rank: query.offset + idx + 1,
         })),

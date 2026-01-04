@@ -47,10 +47,13 @@ class MongoDBClient {
     await this.db
       .collection('products')
       .createIndexes([
-        { key: { productId: 1 }, unique: true },
+        { key: { _id: 1 } },
         { key: { category: 1 } },
+        { key: { categoryId: 1 } },
+        { key: { categoryName: 1 } },
+        { key: { brand: 1 } },
         { key: { updatedAt: -1 } },
-        { key: { 'technicalProperties.category': 1 } },
+        { key: { updated: -1 } },
       ]);
 
     // Orders collection indexes
