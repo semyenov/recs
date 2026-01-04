@@ -181,28 +181,62 @@ export class ProductRepository {
 }
 
 export class OrderRepository {
-  async findById(orderId: string): Promise<Order | null> {
+  async findById(id: string): Promise<Order | null> {
     const db = mongoClient.getDb();
-    return await db.collection<Order>('orders').findOne({ orderId });
+    return await db.collection<Order>('orders').findOne({ _id: id });
   }
 
-  async findByUserId(userId: string, limit?: number): Promise<Order[]> {
+  async findByContragentId(
+    contragentId: string,
+    limit?: number,
+    includeDeleted: boolean = false
+  ): Promise<Order[]> {
     const db = mongoClient.getDb();
-    const query = db.collection<Order>('orders').find({ userId }).sort({ orderDate: -1 });
+    const filter: Record<string, unknown> = { contragentId };
+    if (!includeDeleted) {
+      filter.deleted = { $ne: true };
+      filter.enabled = { $ne: false };
+    }
+    const query = db.collection<Order>('orders').find(filter).sort({ date: -1 });
     if (limit) {
       query.limit(limit);
     }
     return await query.toArray();
   }
 
-  async findByProductId(productId: string): Promise<Order[]> {
+  async findByProductId(productId: string, includeDeleted: boolean = false): Promise<Order[]> {
     const db = mongoClient.getDb();
-    return await db.collection<Order>('orders').find({ 'items.productId': productId }).toArray();
+    const filter: Record<string, unknown> = {
+      $expr: {
+        $gt: [
+          {
+            $size: {
+              $filter: {
+                input: { $objectToArray: '$products' },
+                as: 'product',
+                cond: { $eq: ['$$product.k', productId] },
+              },
+            },
+          },
+          0,
+        ],
+      },
+    };
+    if (!includeDeleted) {
+      filter.deleted = { $ne: true };
+      filter.enabled = { $ne: false };
+    }
+    return await db.collection<Order>('orders').find(filter).toArray();
   }
 
-  async findAll(limit?: number): Promise<Order[]> {
+  async findAll(limit?: number, includeDeleted: boolean = false): Promise<Order[]> {
     const db = mongoClient.getDb();
-    const query = db.collection<Order>('orders').find();
+    const filter: Record<string, unknown> = {};
+    if (!includeDeleted) {
+      filter.deleted = { $ne: true };
+      filter.enabled = { $ne: false };
+    }
+    const query = db.collection<Order>('orders').find(filter);
     if (limit) {
       query.limit(limit);
     }
@@ -213,18 +247,37 @@ export class OrderRepository {
     const db = mongoClient.getDb();
     await db.collection<Order>('orders').insertOne({
       ...order,
-      createdAt: new Date(),
+      createdAt: order.createdAt || new Date(),
     });
   }
 
-  async getProductCoOccurrences(): Promise<Map<string, Map<string, number>>> {
+  /**
+   * Convert products object to array format for algorithms that need it
+   */
+  getProductsAsArray(
+    order: Order
+  ): Array<{ productId: string; name: string; price: number; quantity: number; status: string }> {
+    return Object.entries(order.products).map(([productId, productData]) => ({
+      productId,
+      ...productData,
+    }));
+  }
+
+  async getProductCoOccurrences(
+    includeDeleted: boolean = false
+  ): Promise<Map<string, Map<string, number>>> {
     const db = mongoClient.getDb();
-    const orders = await db.collection<Order>('orders').find().toArray();
+    const filter: Record<string, unknown> = {};
+    if (!includeDeleted) {
+      filter.deleted = { $ne: true };
+      filter.enabled = { $ne: false };
+    }
+    const orders = await db.collection<Order>('orders').find(filter).toArray();
 
     const coOccurrences = new Map<string, Map<string, number>>();
 
     for (const order of orders) {
-      const productIds = order.items.map((item) => item.productId);
+      const productIds = Object.keys(order.products);
 
       // For each pair of products in the order
       for (let i = 0; i < productIds.length; i++) {

@@ -57,8 +57,8 @@ export class BatchExecutor {
         recommendations.push({
           productId,
           algorithmType: 'content-based',
-          recommendations: similar.map((s) => ({
-            productId: s._id,
+          recommendations: similar.map((s: { _id: string; score: number }) => ({
+            _id: s._id,
             score: s.score,
             breakdown: {
               contentBased: s.score,
@@ -122,7 +122,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'collaborative',
           recommendations: topN.map((s) => ({
-            productId: s._id,
+            _id: s._id,
             score: s.score,
             breakdown: {
               collaborative: s.score,
@@ -185,7 +185,7 @@ export class BatchExecutor {
           productId,
           algorithmType: 'association',
           recommendations: topN.map((rule) => ({
-            productId: rule.consequent,
+            _id: rule.consequent,
             score: rule.confidence,
             breakdown: {
               association: rule.confidence,

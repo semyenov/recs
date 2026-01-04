@@ -14,26 +14,26 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '2',
-          orderId: 'O002',
-          userId: 'U002',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O002',
+          contragentId: 'U002',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -54,14 +54,14 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -84,38 +84,38 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '2',
-          orderId: 'O002',
-          userId: 'U002',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P003', quantity: 1, price: 30 },
-          ],
-          totalAmount: 40,
-          orderDate: new Date(),
+          number: 'O002',
+          contragentId: 'U002',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P003: { name: 'Product 3', quantity: 1, price: 30, status: 'Отгрузить' },
+          },
+          summary: 40,
+          date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '3',
-          orderId: 'O003',
-          userId: 'U003',
-          items: [
-            { productId: 'P002', quantity: 1, price: 20 },
-            { productId: 'P003', quantity: 1, price: 30 },
-          ],
-          totalAmount: 50,
-          orderDate: new Date(),
+          number: 'O003',
+          contragentId: 'U003',
+          products: {
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+            P003: { name: 'Product 3', quantity: 1, price: 30, status: 'Отгрузить' },
+          },
+          summary: 50,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -136,29 +136,35 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [{ productId: 'P001', quantity: 1, price: 10 }],
-          totalAmount: 10,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+          },
+          summary: 10,
+          date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '2',
-          orderId: 'O002',
-          userId: 'U002',
-          items: [{ productId: 'P001', quantity: 1, price: 10 }],
-          totalAmount: 10,
-          orderDate: new Date(),
+          number: 'O002',
+          contragentId: 'U002',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+          },
+          summary: 10,
+          date: new Date(),
           createdAt: new Date(),
         },
         {
           _id: '3',
-          orderId: 'O003',
-          userId: 'U002',
-          items: [{ productId: 'P002', quantity: 1, price: 20 }],
-          totalAmount: 20,
-          orderDate: new Date(),
+          number: 'O003',
+          contragentId: 'U002',
+          products: {
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 20,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -175,14 +181,14 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -209,11 +215,13 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [{ productId: 'P001', quantity: 1, price: 10 }],
-          totalAmount: 10,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+          },
+          summary: 10,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];
@@ -235,14 +243,14 @@ describe('CollaborativeFilter', () => {
       const orders: Order[] = [
         {
           _id: '1',
-          orderId: 'O001',
-          userId: 'U001',
-          items: [
-            { productId: 'P001', quantity: 1, price: 10 },
-            { productId: 'P002', quantity: 1, price: 20 },
-          ],
-          totalAmount: 30,
-          orderDate: new Date(),
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
           createdAt: new Date(),
         },
       ];

@@ -10,45 +10,45 @@ export class CollaborativeFilter {
     orders: Order[],
     minCommonUsers: number = 2
   ): Map<string, Array<{ _id: string; score: number }>> {
-    // Step 1: Build user-product interaction matrix
-    const userProducts = new Map<string, Set<string>>();
-    const productUsers = new Map<string, Set<string>>();
+    // Step 1: Build contragent-product interaction matrix
+    const contragentProducts = new Map<string, Set<string>>();
+    const productContragents = new Map<string, Set<string>>();
 
     for (const order of orders) {
-      const userId = order.userId;
-      const productIds = order.items.map((item) => item.productId);
+      const contragentId = order.contragentId;
+      const productIds = Object.keys(order.products);
 
-      if (!userProducts.has(userId)) {
-        userProducts.set(userId, new Set());
+      if (!contragentProducts.has(contragentId)) {
+        contragentProducts.set(contragentId, new Set());
       }
 
       for (const productId of productIds) {
-        userProducts.get(userId)!.add(productId);
+        contragentProducts.get(contragentId)!.add(productId);
 
-        if (!productUsers.has(productId)) {
-          productUsers.set(productId, new Set());
+        if (!productContragents.has(productId)) {
+          productContragents.set(productId, new Set());
         }
-        productUsers.get(productId)!.add(userId);
+        productContragents.get(productId)!.add(contragentId);
       }
     }
 
     // Step 2: Compute item-item similarity using Jaccard similarity
     const similarityMatrix = new Map<string, Array<{ _id: string; score: number }>>();
 
-    const allProducts = Array.from(productUsers.keys());
+    const allProducts = Array.from(productContragents.keys());
 
     for (const productA of allProducts) {
-      const usersA = productUsers.get(productA)!;
+      const contragentsA = productContragents.get(productA)!;
       const similarities: Array<{ _id: string; score: number }> = [];
 
       for (const productB of allProducts) {
         if (productA === productB) continue;
 
-        const usersB = productUsers.get(productB)!;
+        const contragentsB = productContragents.get(productB)!;
 
         // Calculate Jaccard similarity
-        const intersection = new Set([...usersA].filter((u) => usersB.has(u)));
-        const union = new Set([...usersA, ...usersB]);
+        const intersection = new Set([...contragentsA].filter((c) => contragentsB.has(c)));
+        const union = new Set([...contragentsA, ...contragentsB]);
 
         if (intersection.size >= minCommonUsers) {
           const similarity = intersection.size / union.size;
@@ -67,21 +67,22 @@ export class CollaborativeFilter {
   }
 
   /**
-   * Get personalized recommendations for a user based on their order history
+   * Get personalized recommendations for a contragent based on their order history
    */
   getUserRecommendations(
-    userId: string,
+    contragentId: string,
     orders: Order[],
     similarityMatrix: Map<string, Array<{ _id: string; score: number }>>,
     topN: number
   ): Array<{ _id: string; score: number }> {
-    // Get products the user has already purchased
-    const userOrders = orders.filter((o) => o.userId === userId);
+    // Get products the contragent has already purchased
+    const contragentOrders = orders.filter((o) => o.contragentId === contragentId);
     const purchasedProducts = new Set<string>();
 
-    for (const order of userOrders) {
-      for (const item of order.items) {
-        purchasedProducts.add(item.productId);
+    for (const order of contragentOrders) {
+      const productIds = Object.keys(order.products);
+      for (const productId of productIds) {
+        purchasedProducts.add(productId);
       }
     }
 

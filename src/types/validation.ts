@@ -21,19 +21,38 @@ export const productSchema = z.object({
 });
 
 // Order Validation
-export const orderItemSchema = z.object({
-  productId: z.string().min(1),
-  quantity: z.number().int().positive(),
+export const productInOrderSchema = z.object({
+  name: z.string(),
   price: z.number().positive(),
+  quantity: z.number().int().positive(),
+  status: z.string(),
 });
 
 export const orderSchema = z.object({
-  orderId: z.string().min(1),
-  userId: z.string().min(1),
-  items: z.array(orderItemSchema).min(1),
-  totalAmount: z.number().positive(),
-  orderDate: z.coerce.date(),
+  _id: z.string().min(1),
+  number: z.string().optional(),
+  name: z.string().optional(),
+  contragent: z.string().optional(),
+  contragentId: z.string().min(1),
+  manager: z.string().optional(),
+  managerId: z.string().optional(),
+  products: z.record(productInOrderSchema).refine((products) => Object.keys(products).length > 0, {
+    message: 'Products object must have at least one product',
+  }),
+  summary: z.number().positive(),
+  date: z.coerce.date().optional(),
+  createdDate: z.coerce.date().optional(),
+  saleDate: z.coerce.date().optional(),
+  status: z.string().optional(),
+  posted: z.boolean().optional(),
+  deleted: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  size: z.number().int().positive().optional(),
+  timestamp: z.number().optional(),
+  ref: z.string().optional(),
+  dataVersion: z.string().optional(),
   createdAt: z.coerce.date().optional(),
+  __v: z.number().optional(),
 });
 
 // Recommendation Query Validation

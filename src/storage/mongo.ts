@@ -57,15 +57,18 @@ class MongoDBClient {
       ]);
 
     // Orders collection indexes
-    await this.db
-      .collection('orders')
-      .createIndexes([
-        { key: { orderId: 1 }, unique: true },
-        { key: { userId: 1 } },
-        { key: { orderDate: -1 } },
-        { key: { 'items.productId': 1 } },
-        { key: { userId: 1, orderDate: -1 } },
-      ]);
+    await this.db.collection('orders').createIndexes([
+      { key: { _id: 1 } },
+      { key: { contragentId: 1 } },
+      { key: { date: -1 } },
+      { key: { saleDate: -1 } },
+      { key: { status: 1 } },
+      { key: { deleted: 1 } },
+      { key: { enabled: 1 } },
+      { key: { contragentId: 1, date: -1 } },
+      // Note: products object keys cannot be directly indexed
+      // Queries for products use $expr with $objectToArray
+    ]);
 
     // Recommendations collection indexes
     await this.db
