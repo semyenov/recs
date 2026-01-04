@@ -201,7 +201,7 @@ export class BatchExecutor {
       const productFrequencies = await this.orderRepo.getProductFrequencies();
       logger.info(`Loaded frequencies for ${productFrequencies.size} products`, { batchId });
 
-      const totalOrders = (await this.orderRepo.findAll()).length;
+      const totalOrders = await this.orderRepo.size();
       logger.info(`Total orders: ${totalOrders}`, { batchId });
 
       // Step 2: Mine association rules
@@ -351,7 +351,7 @@ export class BatchExecutor {
     // Calculate coverage (% of products with recommendations)
     // Coverage ensures we're providing recommendations for a meaningful portion of the catalog
     logger.info('Calculating coverage percentage');
-    const totalProducts = (await this.productRepo.findAll()).length;
+    const totalProducts = await this.productRepo.size();
     const coverage = recommendations.length / totalProducts;
     logger.info('Coverage calculated', {
       coverage,

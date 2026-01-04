@@ -4,6 +4,14 @@ import { logger } from '../config/logger';
 
 export class ProductRepository {
   /**
+   * Size of the product collection
+   */
+  async size(): Promise<number> {
+    const db = mongoClient.getDb();
+    return await db.collection<Product>('products').countDocuments();
+  }
+
+  /**
    * Find product by MongoDB _id
    */
   async findById(id: string): Promise<Product | null> {
@@ -196,6 +204,14 @@ export class ProductRepository {
 }
 
 export class OrderRepository {
+  /**
+   * Size of the order collection
+   */
+  async size(): Promise<number> {
+    const db = mongoClient.getDb();
+    return await db.collection<Order>('orders').countDocuments();
+  }
+
   async findById(id: string): Promise<Order | null> {
     const db = mongoClient.getDb();
     return await db.collection<Order>('orders').findOne({ _id: id });
