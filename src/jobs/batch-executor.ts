@@ -5,8 +5,6 @@ import {
   OrderRepository,
   RecommendationRepository,
 } from '../storage/repositories';
-import { FeatureExtractor } from '../algorithms/feature-extraction';
-import { SimilarityCalculator } from '../algorithms/similarity';
 import { CollaborativeFilter } from '../algorithms/collaborative-filtering';
 import { AssociationRuleMiner } from '../algorithms/association-rules';
 import { redisClient } from '../storage/redis';
@@ -18,118 +16,9 @@ export class BatchExecutor {
   private productRepo = new ProductRepository();
   private orderRepo = new OrderRepository();
   private recommendationRepo = new RecommendationRepository();
-  private featureExtractor = new FeatureExtractor();
-  private similarityCalculator = new SimilarityCalculator();
   private collaborativeFilter = new CollaborativeFilter();
   private associationRuleMiner = new AssociationRuleMiner();
   // private recommendationEngine = new RecommendationEngine(); // TODO: Use for hybrid blending
-
-  async executeContentBasedJob(_job: Job): Promise<void> {
-    const batchId = uuidv4();
-    const version = `v${Date.now()}`;
-    const startTime = Date.now();
-
-    logger.info('Starting content-based batch job', { batchId, version });
-
-    try {
-      // Step 1: Load category statistics
-      logger.info('Loading category statistics', { batchId, version });
-      const categoryStats = await this.productRepo.getCategoryStatistics();
-      logger.info(`Loaded category statistics for ${categoryStats.size} categories`, { batchId });
-      await redisClient.set('category_stats', Array.from(categoryStats.entries()), 86400); // 24h cache
-      this.featureExtractor.setCategoryStatistics(categoryStats);
-
-      // Step 2: Load all products
-      logger.info('Loading all products', { batchId, version });
-      const products = await this.productRepo.findAll();
-      logger.info(`Loaded ${products.length} products`, { batchId });
-
-      // Step 3: Extract and normalize features
-      logger.info('Extracting and normalizing features', {
-        batchId,
-        version,
-        productCount: products.length,
-      });
-      const featureVectors = this.featureExtractor.batchExtractAndNormalize(products);
-      logger.info(`Extracted features for ${featureVectors.length} products`, { batchId });
-
-      // Step 4: Compute similarity matrix
-      logger.info('Computing similarity matrix', {
-        batchId,
-        version,
-        topN: config.PRE_COMPUTE_TOP_N,
-        minScore: config.MIN_SCORE_THRESHOLD,
-      });
-      const similarityMatrix = this.similarityCalculator.computeSimilarityMatrix(
-        featureVectors,
-        config.PRE_COMPUTE_TOP_N,
-        config.MIN_SCORE_THRESHOLD
-      );
-      logger.info(`Computed similarity matrix for ${similarityMatrix.size} products`, { batchId });
-
-      // Step 5: Save recommendations
-      logger.info('Building recommendations array', { batchId, version });
-      const recommendations: Recommendation[] = [];
-      for (const [productId, similar] of similarityMatrix) {
-        recommendations.push({
-          productId,
-          algorithmType: 'content-based',
-          recommendations: similar.map((s: { _id: string; score: number }) => ({
-            _id: s._id,
-            score: s.score,
-            breakdown: {
-              contentBased: s.score,
-              blendedScore: s.score,
-              weights: { contentBased: 1, collaborative: 0, association: 0 },
-            },
-          })),
-          version,
-          batchId,
-          createdAt: new Date(),
-        });
-      }
-      logger.info(`Built ${recommendations.length} recommendations`, { batchId });
-
-      logger.info('Saving recommendations to repository', {
-        batchId,
-        version,
-        count: recommendations.length,
-      });
-      await this.recommendationRepo.bulkUpsert(recommendations);
-      logger.info('Recommendations saved successfully', { batchId });
-
-      // Step 6: Quality validation
-      // Quality checks ensure recommendations meet minimum standards before promotion:
-      // - Average score: Ensures recommendations have meaningful similarity scores
-      // - Coverage: Ensures a sufficient percentage of products have recommendations
-      // - Diversity: Ensures recommendations cover a diverse set of products
-      logger.info('Validating recommendation quality', { batchId, version });
-      const metrics = await this.validateQuality(recommendations);
-      logger.info('Quality metrics calculated', { batchId, version, metrics });
-
-      // Step 7: Promote if quality gates pass
-      // Quality gates act as a safety check to prevent promoting low-quality recommendations
-      // If gates fail, the version is deleted and not promoted to production
-      logger.info('Checking quality gates', { batchId, version, metrics });
-      if (await this.qualityGatesPassed(metrics, 'content-based')) {
-        logger.info('Quality gates passed, promoting version', { batchId, version });
-        await this.promoteVersion(version, metrics);
-        logger.info('✅ Content-based batch job completed successfully', {
-          batchId,
-          version,
-          duration: Date.now() - startTime,
-          productsProcessed: products.length,
-        });
-      } else {
-        logger.error('❌ Quality gates failed, version not promoted', { version, metrics });
-        logger.info('Deleting failed version recommendations', { batchId, version });
-        await this.recommendationRepo.deleteByVersion(version);
-      }
-    } catch (error) {
-      logger.error('❌ Content-based batch job failed', { batchId, error });
-      throw error;
-    }
-  }
 
   async executeCollaborativeJob(_job: Job): Promise<void> {
     const batchId = uuidv4();
@@ -171,7 +60,7 @@ export class BatchExecutor {
             breakdown: {
               collaborative: s.score,
               blendedScore: s.score,
-              weights: { contentBased: 0, collaborative: 1, association: 0 },
+              weights: { collaborative: 1, association: 0 },
             },
           })),
           version,
@@ -276,7 +165,7 @@ export class BatchExecutor {
             breakdown: {
               association: rule.confidence,
               blendedScore: rule.confidence,
-              weights: { contentBased: 0, collaborative: 0, association: 1 },
+              weights: { collaborative: 0, association: 1 },
             },
           })),
           version,
@@ -404,7 +293,7 @@ export class BatchExecutor {
    * Quality gates ensure recommendations meet minimum quality standards before promotion.
    *
    * Algorithm-specific thresholds:
-   * - content-based & collaborative:
+   * - collaborative:
    *   - avgScore >= 0.15: Recommendations must have at least a 0.15 average similarity/confidence score
    *   - coverage >= 0.2: At least 20% of products must have recommendations
    *   - diversityScore >= 0.001: Recommendations must cover at least 0.1% unique products
@@ -418,7 +307,7 @@ export class BatchExecutor {
    */
   private async qualityGatesPassed(
     metrics: QualityMetrics,
-    algorithmType: 'content-based' | 'collaborative' | 'association' = 'content-based'
+    algorithmType: 'collaborative' | 'association' = 'collaborative'
   ): Promise<boolean> {
     // Algorithm-specific thresholds
     const thresholds =

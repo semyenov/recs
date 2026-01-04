@@ -1,11 +1,10 @@
 # Product Recommendation Service
 
-A hybrid product recommendation service built with TypeScript, MongoDB, and Redis. Provides intelligent product recommendations using content-based filtering, collaborative filtering, and association rules.
+A hybrid product recommendation service built with TypeScript, MongoDB, and Redis. Provides intelligent product recommendations using collaborative filtering and association rules.
 
 ## Features
 
 - **Hybrid Recommendation Engine**: Combines multiple algorithms for accurate recommendations
-  - Content-based filtering (cosine similarity on product attributes)
   - Collaborative filtering (item-based, using user purchase history)
   - Association rules (frequently bought together)
 - **High Performance**: Redis caching layer with MongoDB for persistent storage
@@ -115,9 +114,9 @@ curl -H "x-api-key: your-api-key" http://localhost:3000/v1/products/P001/similar
 
 ### Endpoints
 
-#### Get Similar Products (Content-Based)
+#### Get Frequently Bought With Products
 ```bash
-GET /v1/products/{productId}/similar?limit=20&offset=0
+GET /v1/products/{productId}/frequently-bought-with?limit=20&offset=0
 ```
 
 Response:
@@ -226,11 +225,10 @@ Log level can be configured via `LOG_LEVEL` environment variable.
 
 ## Background Jobs
 
-The service runs three batch jobs to pre-compute recommendations:
+The service runs two batch jobs to pre-compute recommendations:
 
-1. **Content-Based** (Daily at 2 AM): Computes product similarity based on attributes
-2. **Collaborative Filtering** (Hourly): Computes item-based similarities from user orders
-3. **Association Rules** (Daily at 3 AM): Mines frequently bought together patterns
+1. **Collaborative Filtering** (Hourly): Computes item-based similarities from user orders
+2. **Association Rules** (Daily at 3 AM): Mines frequently bought together patterns
 
 ### Job Scheduling
 
@@ -283,7 +281,6 @@ See `_bmad-output/implementation-artifacts/tech-spec-product-recommendation-serv
 - ADR-001: Tiered Storage Architecture (MongoDB + Redis)
 - ADR-002: Item-Based Collaborative Filtering
 - ADR-003: Multiple Pre-Computation Schedules
-- ADR-004: Cosine Similarity for Content-Based Filtering
 - ADR-009: MongoDB Schema Design
 - ADR-010: API Versioning Strategy
 - ADR-011: Rate Limiting Strategy

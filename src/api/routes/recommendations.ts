@@ -57,71 +57,6 @@ function convertRecommendationsToAlgorithmFormat(
 }
 
 /**
- * GET /v1/products/:productId/similar
- * Get content-based similar products
- */
-router.get('/products/:productId/similar', async (req, res, next) => {
-  try {
-    const { productId } = req.params;
-    const query = recommendationQuerySchema.parse(req.query);
-
-    const startTime = Date.now();
-
-    // Get current version
-    const currentVersion = await redisClient.get<string>('rec:current_version');
-    if (!currentVersion) {
-      res.status(503).json({ error: 'Recommendations not available yet' });
-      return;
-    }
-
-    // Try cache first
-    const cacheKey = `recs:${productId}:${currentVersion}`;
-    let recommendations = await redisClient.get<RecommendationResponse>(cacheKey);
-    let cacheHit = true;
-
-    if (!recommendations) {
-      // Fallback to MongoDB
-      cacheHit = false;
-      const dbRec = await recommendationRepo.findByProductId(productId, currentVersion);
-
-      if (!dbRec) {
-        res.status(404).json({ error: 'Product not found or no recommendations available' });
-        return;
-      }
-
-      recommendations = {
-        productId,
-        recommendations: dbRec.recommendations
-          .slice(query.offset, query.offset + query.limit)
-          .map((r, idx) => ({
-            productId: r._id,
-            score: r.score,
-            rank: query.offset + idx + 1,
-          })),
-        pagination: {
-          limit: query.limit,
-          offset: query.offset,
-          total: dbRec.recommendations.length,
-          hasMore: query.offset + query.limit < dbRec.recommendations.length,
-        },
-        metadata: {
-          version: currentVersion,
-          cacheHit,
-          computeTime: Date.now() - startTime,
-        },
-      };
-
-      // Cache for future requests
-      await redisClient.set(cacheKey, recommendations, 14400); // 4h TTL
-    }
-
-    res.json(recommendations);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
  * GET /v1/products/:productId/frequently-bought-with
  * Get association-based recommendations
  */
@@ -211,27 +146,18 @@ router.get('/contragents/:contragentId/recommended', async (req, res, next) => {
             topN
           );
         } catch (error) {
-          logger.warn(
-            'Failed to get collaborative recommendations, falling back to content-based',
-            {
-              contragentId,
-              error,
-            }
-          );
-          // Fall through to content-based fallback
+          logger.warn('Failed to get collaborative recommendations', {
+            contragentId,
+            error,
+          });
         }
       }
 
-      // Cold start: fallback to content-based recommendations
+      // Cold start: return empty recommendations if no purchase history
       if (recommendations.length === 0) {
-        // Get popular content-based recommendations (simplified: get from any product)
-        const contentBasedRecs = await recommendationRepo.findByVersion(currentVersion, 1);
-        if (contentBasedRecs.length > 0 && contentBasedRecs[0].algorithmType === 'content-based') {
-          // Use top recommendations from first product as fallback
-          recommendations = convertRecommendationsToAlgorithmFormat(
-            contentBasedRecs[0].recommendations.slice(0, query.limit + query.offset + 50)
-          );
-        }
+        logger.info('No recommendations available for contragent with no purchase history', {
+          contragentId,
+        });
       }
 
       // Apply pagination
@@ -297,14 +223,11 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
     if (!cachedResponse) {
       cacheHit = false;
 
-      // Load recommendations from all three algorithms
+      // Load recommendations from both algorithms
       // Query MongoDB directly to get recommendations by algorithm type
       const { mongoClient } = await import('../../storage/mongo');
       const db = mongoClient.getDb();
-      const [contentBasedRec, collaborativeRec, associationRec] = await Promise.all([
-        db
-          .collection<Recommendation>('recommendations')
-          .findOne({ productId, version: currentVersion, algorithmType: 'content-based' }),
+      const [collaborativeRec, associationRec] = await Promise.all([
         db
           .collection<Recommendation>('recommendations')
           .findOne({ productId, version: currentVersion, algorithmType: 'collaborative' }),
@@ -321,9 +244,6 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
       }
 
       // Convert to algorithm input format
-      const contentBased = contentBasedRec
-        ? convertRecommendationsToAlgorithmFormat(contentBasedRec.recommendations || [])
-        : [];
       const collaborative = collaborativeRec
         ? convertRecommendationsToAlgorithmFormat(collaborativeRec.recommendations || [])
         : [];
@@ -333,7 +253,6 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
 
       // Compute context-aware weights
       const weights = recommendationEngine.computeContextAwareWeights(
-        contentBased.length > 0,
         collaborative.length > 0,
         association.length > 0,
         contragentHasPurchaseHistory
@@ -342,7 +261,6 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
       // Blend recommendations
       const topN = query.limit + query.offset + 50; // Get extra for pagination
       const blendedRecs = recommendationEngine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,

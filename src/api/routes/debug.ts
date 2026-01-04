@@ -90,7 +90,6 @@ router.post('/rollback', requireAdmin, async (_req, res, next) => {
  * Force start a batch job immediately (admin only)
  *
  * Job types:
- * - content-based: Computes product similarity based on attributes
  * - collaborative: Computes item-based similarities from user orders
  * - association-rules: Mines frequently bought together patterns
  */
@@ -98,7 +97,7 @@ router.post('/trigger-batch/:jobType', requireAdmin, debugRateLimiter, async (re
   try {
     const { jobType } = req.params;
 
-    const validJobTypes = ['content-based', 'collaborative', 'association-rules'];
+    const validJobTypes = ['collaborative', 'association-rules'];
     if (!validJobTypes.includes(jobType)) {
       res.status(400).json({
         error: 'Invalid job type',
@@ -117,7 +116,6 @@ router.post('/trigger-batch/:jobType', requireAdmin, debugRateLimiter, async (re
 
     // Map route parameter to job name
     const jobNameMap: Record<string, string> = {
-      'content-based': 'compute-content-based',
       collaborative: 'compute-collaborative',
       'association-rules': 'compute-association-rules',
     };

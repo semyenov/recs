@@ -104,12 +104,10 @@ export interface RecommendationScore {
 }
 
 export interface ScoreBreakdown {
-  contentBased?: number;
   collaborative?: number;
   association?: number;
   blendedScore: number;
   weights: {
-    contentBased: number;
     collaborative: number;
     association: number;
   };
@@ -118,7 +116,7 @@ export interface ScoreBreakdown {
 export interface Recommendation {
   _id?: string;
   productId: string; // This is the _id of the product for which recommendations are generated (kept for backward compatibility with existing data)
-  algorithmType: 'content-based' | 'collaborative' | 'association' | 'hybrid';
+  algorithmType: 'collaborative' | 'association' | 'hybrid';
   recommendations: RecommendationScore[];
   version: string;
   batchId: string;
@@ -141,11 +139,11 @@ export interface FeatureVector {
 export interface CategoryStats {
   category: string;
   medians: {
-    [key: string]: number;
+    [attributeKey: string]: number;
   };
   counts: {
     total: number;
-    [key: string]: number;
+    [attributeKey: string]: number;
   };
   lastUpdated: Date;
 }

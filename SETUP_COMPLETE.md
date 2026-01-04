@@ -157,17 +157,11 @@ Each product has:
 
 The worker automatically runs these jobs:
 
-1. **Content-Based** (Daily at 2 AM)
-   - Computes product similarity using attributes
-   - Uses cosine similarity
+1. **Collaborative Filtering** (Hourly)
+   - Computes item-based similarity from user orders
    - Pre-computes top 100 for each product
 
-2. **Collaborative Filtering** (Every hour)
-   - Computes item-based similarities from orders
-   - Uses Jaccard similarity
-   - Finds frequently bought together patterns
-
-3. **Association Rules** (Daily at 3 AM)
+2. **Association Rules** (Daily at 3 AM)
    - Mines "frequently bought with" rules
    - Uses support-confidence framework
    - Min confidence: 30%
@@ -319,9 +313,8 @@ After running `./scripts/quick-start.sh`:
 - Graceful shutdown
 - Error handling
 
-### ✅ **Three Recommendation Algorithms**
-1. **Content-Based** - Product similarity by attributes
-2. **Collaborative Filtering** - Item-based from user behavior
+### ✅ **Two Recommendation Algorithms**
+1. **Collaborative Filtering** - Item-based from user behavior
 3. **Association Rules** - Frequently bought together
 
 ### ✅ **Enterprise Features**

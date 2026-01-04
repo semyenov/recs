@@ -6,7 +6,7 @@ export const productAttributeSchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]),
 });
 
-export const productAttributesSchema = z.record(productAttributeSchema).optional();
+export const productAttributesSchema = z.record(z.string(), productAttributeSchema).optional();
 
 export const productSchema = z.object({
   _id: z.string().min(1),
@@ -36,7 +36,7 @@ export const orderSchema = z.object({
   contragentId: z.string().min(1),
   manager: z.string().optional(),
   managerId: z.string().optional(),
-  products: z.record(productInOrderSchema).refine((products) => Object.keys(products).length > 0, {
+  products: z.record(z.string(), productInOrderSchema).refine((products) => Object.keys(products).length > 0, {
     message: 'Products object must have at least one product',
   }),
   summary: z.number().positive(),

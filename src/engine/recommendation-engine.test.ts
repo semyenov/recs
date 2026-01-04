@@ -10,11 +10,6 @@ describe('RecommendationEngine', () => {
 
   describe('blendRecommendations', () => {
     it('should blend recommendations from multiple algorithms', () => {
-      const contentBased = [
-        { _id: 'P001', score: 0.9 },
-        { _id: 'P002', score: 0.8 },
-      ];
-
       const collaborative = [
         { _id: 'P002', score: 0.85 },
         { _id: 'P003', score: 0.75 },
@@ -25,10 +20,9 @@ describe('RecommendationEngine', () => {
         { _id: 'P004', score: 0.6 },
       ];
 
-      const weights = { contentBased: 0.3, collaborative: 0.5, association: 0.2 };
+      const weights = { collaborative: 0.6, association: 0.4 };
 
       const blended = engine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,
@@ -42,37 +36,29 @@ describe('RecommendationEngine', () => {
     });
 
     it('should calculate blended scores correctly', () => {
-      const contentBased = [{ _id: 'P001', score: 1.0 }];
       const collaborative = [{ _id: 'P001', score: 0.8 }];
       const association = [{ _id: 'P001', score: 0.6 }];
 
-      const weights = { contentBased: 0.3, collaborative: 0.5, association: 0.2 };
+      const weights = { collaborative: 0.6, association: 0.4 };
 
       const blended = engine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,
         10
       );
 
-      // Expected score: 1.0*0.3 + 0.8*0.5 + 0.6*0.2 = 0.3 + 0.4 + 0.12 = 0.82
-      expect(blended[0].score).toBeCloseTo(0.82, 2);
+      // Expected score: 0.8*0.6 + 0.6*0.4 = 0.48 + 0.24 = 0.72
+      expect(blended[0].score).toBeCloseTo(0.72, 2);
     });
 
     it('should sort results by blended score descending', () => {
-      const contentBased = [
-        { _id: 'P001', score: 0.5 },
-        { _id: 'P002', score: 0.9 },
-      ];
-
       const collaborative = [{ _id: 'P001', score: 0.9 }];
       const association: Array<{ _id: string; score: number }> = [];
 
-      const weights = { contentBased: 0.5, collaborative: 0.5, association: 0.0 };
+      const weights = { collaborative: 1.0, association: 0.0 };
 
       const blended = engine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,
@@ -86,19 +72,17 @@ describe('RecommendationEngine', () => {
     });
 
     it('should limit results to topN', () => {
-      const contentBased = [
+      const collaborative = [
         { _id: 'P001', score: 0.9 },
         { _id: 'P002', score: 0.8 },
         { _id: 'P003', score: 0.7 },
       ];
 
-      const collaborative: Array<{ _id: string; score: number }> = [];
       const association: Array<{ _id: string; score: number }> = [];
 
-      const weights = { contentBased: 1.0, collaborative: 0.0, association: 0.0 };
+      const weights = { collaborative: 1.0, association: 0.0 };
 
       const blended = engine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,
@@ -110,21 +94,18 @@ describe('RecommendationEngine', () => {
     });
 
     it('should include score breakdown in results', () => {
-      const contentBased = [{ _id: 'P001', score: 0.9 }];
       const collaborative = [{ _id: 'P001', score: 0.8 }];
       const association = [{ _id: 'P001', score: 0.7 }];
 
-      const weights = { contentBased: 0.3, collaborative: 0.5, association: 0.2 };
+      const weights = { collaborative: 0.6, association: 0.4 };
 
       const blended = engine.blendRecommendations(
-        contentBased,
         collaborative,
         association,
         weights,
         10
       );
 
-      expect(blended[0].breakdown).toHaveProperty('contentBased', 0.9);
       expect(blended[0].breakdown).toHaveProperty('collaborative', 0.8);
       expect(blended[0].breakdown).toHaveProperty('association', 0.7);
       expect(blended[0].breakdown).toHaveProperty('blendedScore');
@@ -133,43 +114,40 @@ describe('RecommendationEngine', () => {
   });
 
   describe('computeContextAwareWeights', () => {
-    it('should favor content-based for users with no purchase history', () => {
-      const weights = engine.computeContextAwareWeights(true, true, true, false);
+    it('should favor association rules for users with no purchase history', () => {
+      const weights = engine.computeContextAwareWeights(true, true, false);
 
-      expect(weights.contentBased).toBeGreaterThan(weights.collaborative);
-      expect(weights.contentBased).toBeCloseTo(0.6, 1);
+      expect(weights.association).toBeGreaterThan(weights.collaborative);
+      expect(weights.association).toBeCloseTo(0.7, 1);
     });
 
     it('should use balanced weights for users with purchase history', () => {
-      const weights = engine.computeContextAwareWeights(true, true, true, true);
+      const weights = engine.computeContextAwareWeights(true, true, true);
 
-      expect(weights.contentBased).toBeCloseTo(0.3, 1);
-      expect(weights.collaborative).toBeCloseTo(0.4, 1);
-      expect(weights.association).toBeCloseTo(0.3, 1);
+      expect(weights.collaborative).toBeCloseTo(0.6, 1);
+      expect(weights.association).toBeCloseTo(0.4, 1);
     });
 
     it('should redistribute weights when some algorithms have no data', () => {
-      const weights = engine.computeContextAwareWeights(true, false, true, true);
+      const weights = engine.computeContextAwareWeights(false, true, true);
 
       expect(weights.collaborative).toBe(0);
-      expect(weights.contentBased).toBeGreaterThan(0);
-      expect(weights.association).toBeGreaterThan(0);
+      expect(weights.association).toBe(1.0);
     });
 
     it('should normalize weights to sum to 1', () => {
-      const weights = engine.computeContextAwareWeights(true, true, true, true);
+      const weights = engine.computeContextAwareWeights(true, true, true);
 
-      const sum = weights.contentBased + weights.collaborative + weights.association;
+      const sum = weights.collaborative + weights.association;
       expect(sum).toBeCloseTo(1.0, 2);
     });
 
     it('should handle case with no available algorithms', () => {
-      const weights = engine.computeContextAwareWeights(false, false, false, true);
+      const weights = engine.computeContextAwareWeights(false, false, true);
 
-      // Should return default weights even if no data
-      expect(weights.contentBased).toBeGreaterThanOrEqual(0);
-      expect(weights.collaborative).toBeGreaterThanOrEqual(0);
-      expect(weights.association).toBeGreaterThanOrEqual(0);
+      // Should return equal weights even if no data
+      expect(weights.collaborative).toBe(0.5);
+      expect(weights.association).toBe(0.5);
     });
   });
 
@@ -181,7 +159,7 @@ describe('RecommendationEngine', () => {
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,
-            weights: { contentBased: 1, collaborative: 0, association: 0 },
+            weights: { collaborative: 1, association: 0 },
           },
         },
       ];
@@ -200,7 +178,7 @@ describe('RecommendationEngine', () => {
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,
-            weights: { contentBased: 1, collaborative: 0, association: 0 },
+            weights: { collaborative: 1, association: 0 },
           },
         },
       ];
@@ -218,7 +196,7 @@ describe('RecommendationEngine', () => {
           score: 0.5,
           breakdown: {
             blendedScore: 0.5,
-            weights: { contentBased: 1, collaborative: 0, association: 0 },
+            weights: { collaborative: 1, association: 0 },
           },
         },
       ];
@@ -236,7 +214,7 @@ describe('RecommendationEngine', () => {
           score: 0.8,
           breakdown: {
             blendedScore: 0.8,
-            weights: { contentBased: 1, collaborative: 0, association: 0 },
+            weights: { collaborative: 1, association: 0 },
           },
         },
       ];

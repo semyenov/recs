@@ -44,21 +44,6 @@ export class JobScheduler {
   }
 
   async scheduleRecurringJobs(): Promise<void> {
-    // Content-based recommendations: Daily at 2 AM
-    await this.scheduleJob({
-      name: 'compute-content-based',
-      opts: {
-        repeat: {
-          pattern: '0 2 * * *', // Cron: 2 AM daily
-        },
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 60000, // 1 minute
-        },
-      },
-    });
-
     // Collaborative filtering: Hourly
     await this.scheduleJob({
       name: 'compute-collaborative',

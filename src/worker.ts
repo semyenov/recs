@@ -18,10 +18,6 @@ export async function startWorker(): Promise<void> {
     const batchExecutor = new BatchExecutor();
 
     // Register workers
-    jobScheduler.registerWorker('compute-content-based', async (job) => {
-      await batchExecutor.executeContentBasedJob(job);
-    });
-
     jobScheduler.registerWorker('compute-collaborative', async (job) => {
       await batchExecutor.executeCollaborativeJob(job);
     });

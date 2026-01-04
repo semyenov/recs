@@ -17,84 +17,6 @@ describe('Recommendations API', () => {
     app.use(errorHandler);
   });
 
-  describe('GET /v1/products/:productId/similar', () => {
-    it('should return 401 without API key', async () => {
-      const response = await request(app).get('/v1/products/P001/similar');
-      expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect((response.body as { error: string }).error).toBe('API key required');
-    });
-
-    it('should return 401 with invalid API key format', async () => {
-      const response = await request(app).get('/v1/products/P001/similar').set('x-api-key', '');
-      expect(response.status).toBe(401);
-    });
-
-    it('should handle missing recommendations gracefully', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar')
-        .set('x-api-key', 'admin-key-123');
-
-      // Expect either 503 (no recommendations) or 500 (Redis not connected in test)
-      expect([500, 503]).toContain(response.status);
-    });
-
-    it('should accept valid API key', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should not return 401
-      expect(response.status).not.toBe(401);
-    });
-
-    it('should handle query parameters', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar?limit=10&offset=0')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should accept query params (may return 500/503 if Redis not connected, but not 400 validation error)
-      expect(response.status).not.toBe(400);
-    });
-
-    it('should validate limit parameter', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar?limit=200')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should either reject invalid limit or clamp to max (100)
-      // If it passes validation, it might return 503/500 due to no data
-      expect(response.status).toBeGreaterThanOrEqual(200);
-    });
-
-    it('should handle offset parameter', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar?offset=5')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should accept offset parameter (may return 500/503 if Redis not connected, but not 400 validation error)
-      expect(response.status).not.toBe(400);
-    });
-
-    it('should handle negative offset', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar?offset=-1')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should either reject or clamp to 0
-      expect(response.status).toBeGreaterThanOrEqual(200);
-    });
-
-    it('should handle invalid limit type', async () => {
-      const response = await request(app)
-        .get('/v1/products/P001/similar?limit=abc')
-        .set('x-api-key', 'admin-key-123');
-
-      // Should either reject or use default
-      expect(response.status).toBeGreaterThanOrEqual(200);
-    });
-  });
-
   describe('GET /v1/products/:productId/frequently-bought-with', () => {
     it('should return 401 without API key', async () => {
       const response = await request(app).get('/v1/products/P001/frequently-bought-with');
@@ -269,7 +191,7 @@ describe('Recommendations API', () => {
   describe('Error handling', () => {
     it('should handle malformed product IDs', async () => {
       const response = await request(app)
-        .get('/v1/products//similar')
+        .get('/v1/products//frequently-bought-with')
         .set('x-api-key', 'admin-key-123');
 
       // Should handle malformed IDs gracefully
@@ -279,7 +201,7 @@ describe('Recommendations API', () => {
     it('should handle very long product IDs', async () => {
       const longId = 'P'.repeat(1000);
       const response = await request(app)
-        .get(`/v1/products/${longId}/similar`)
+        .get(`/v1/products/${longId}/frequently-bought-with`)
         .set('x-api-key', 'admin-key-123');
 
       // Should handle long IDs
@@ -288,7 +210,7 @@ describe('Recommendations API', () => {
 
     it('should handle special characters in product IDs', async () => {
       const response = await request(app)
-        .get('/v1/products/P001%20test/similar')
+        .get('/v1/products/P001%20test/frequently-bought-with')
         .set('x-api-key', 'admin-key-123');
 
       // Should handle URL-encoded IDs
@@ -307,7 +229,7 @@ describe('Recommendations API', () => {
     });
 
     it('should include error message in error responses', async () => {
-      const response = await request(app).get('/v1/products/P001/similar');
+      const response = await request(app).get('/v1/products/P001/frequently-bought-with');
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error');
       expect(typeof (response.body as { error: unknown }).error).toBe('string');

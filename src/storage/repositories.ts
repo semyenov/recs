@@ -83,12 +83,13 @@ export class ProductRepository {
     // Get all products to compute statistics
     const products = await db.collection<Product>('products').find().toArray();
 
+    // Use Map to store attribute values per category
+    // Structure: category -> attributeKey -> number[]
     const categoryData = new Map<
       string,
       {
-        sizes: number[];
+        attributes: Map<string, number[]>;
         prices: number[];
-        weights: number[];
         count: number;
       }
     >();
@@ -100,35 +101,40 @@ export class ProductRepository {
         normalized.categoryId || normalized.categoryName || normalized.category || 'unknown';
 
       if (!categoryData.has(categoryKey)) {
-        categoryData.set(categoryKey, { sizes: [], prices: [], weights: [], count: 0 });
+        categoryData.set(categoryKey, {
+          attributes: new Map<string, number[]>(),
+          prices: [],
+          count: 0,
+        });
       }
 
       const data = categoryData.get(categoryKey)!;
       data.count++;
 
-      // Extract numeric values from attributes
+      // Extract all numeric values from attributes
       if (normalized.attributes) {
         for (const [key, attr] of Object.entries(normalized.attributes)) {
           const value = attr.value;
-          if (key.toLowerCase().includes('size') || key.toLowerCase().includes('вес')) {
-            if (typeof value === 'number') {
-              data.sizes.push(value);
-            } else if (typeof value === 'string') {
-              const numValue = parseFloat(value);
-              if (!isNaN(numValue) && isFinite(numValue)) {
-                data.sizes.push(numValue);
-              }
+          let numValue: number | undefined;
+
+          // Convert value to number if possible
+          if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+            numValue = value;
+          } else if (typeof value === 'boolean') {
+            numValue = value ? 1 : 0;
+          } else if (typeof value === 'string') {
+            const parsed = parseFloat(value);
+            if (!isNaN(parsed) && isFinite(parsed)) {
+              numValue = parsed;
             }
           }
-          if (key.toLowerCase().includes('weight') || key.toLowerCase().includes('масс')) {
-            if (typeof value === 'number') {
-              data.weights.push(value);
-            } else if (typeof value === 'string') {
-              const numValue = parseFloat(value);
-              if (!isNaN(numValue) && isFinite(numValue)) {
-                data.weights.push(numValue);
-              }
+
+          // Store numeric value for this attribute
+          if (numValue !== undefined) {
+            if (!data.attributes.has(key)) {
+              data.attributes.set(key, []);
             }
+            data.attributes.get(key)!.push(numValue);
           }
         }
       }
@@ -150,19 +156,28 @@ export class ProductRepository {
     const statsMap = new Map<string, CategoryStats>();
 
     for (const [category, data] of categoryData.entries()) {
+      // Calculate medians for all numeric attributes
+      const medians: { [key: string]: number } = {};
+      const counts: { total: number; [key: string]: number } = { total: data.count };
+
+      // Process all attribute medians
+      for (const [attrKey, values] of data.attributes.entries()) {
+        if (values.length > 0) {
+          medians[attrKey] = this.calculateMedian(values);
+          counts[`with${attrKey.charAt(0).toUpperCase() + attrKey.slice(1)}`] = values.length;
+        }
+      }
+
+      // Add price median if available
+      if (data.prices.length > 0) {
+        medians['price'] = this.calculateMedian(data.prices);
+        counts['withPrice'] = data.prices.length;
+      }
+
       statsMap.set(category, {
         category,
-        medians: {
-          size: this.calculateMedian(data.sizes),
-          price: this.calculateMedian(data.prices),
-          weight: this.calculateMedian(data.weights),
-        },
-        counts: {
-          total: data.count,
-          withSize: data.sizes.length,
-          withPrice: data.prices.length,
-          withWeight: data.weights.length,
-        },
+        medians,
+        counts,
         lastUpdated: new Date(),
       });
     }

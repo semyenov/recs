@@ -131,7 +131,6 @@ Or visit: http://localhost:9090 (Prometheus dashboard)
 ## 🔄 Trigger First Batch Job
 
 The worker runs batch jobs on a schedule:
-- **Content-based**: Daily at 2 AM
 - **Collaborative**: Every hour
 - **Association rules**: Daily at 3 AM
 
@@ -175,11 +174,11 @@ Include in header:
 
 ## 📖 API Examples
 
-### Get Similar Products (Content-Based)
+### Get Frequently Bought With Products
 
 ```bash
 curl -H "x-api-key: admin-key-docker-123" \
-  "http://localhost:3000/v1/products/P0001/similar?limit=10&offset=0"
+  "http://localhost:3000/v1/products/P0001/frequently-bought-with?limit=10&offset=0"
 ```
 
 ### Get Frequently Bought Together

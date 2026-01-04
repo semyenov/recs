@@ -2,7 +2,6 @@ import { RecommendationScore, ScoreBreakdown } from '../types';
 import { config } from '../config/env';
 
 export interface HybridWeights {
-  contentBased: number;
   collaborative: number;
   association: number;
 }
@@ -12,7 +11,6 @@ export class RecommendationEngine {
    * Blend recommendations from multiple algorithms using weighted linear combination
    */
   blendRecommendations(
-    contentBased: Array<{ _id: string; score: number }>,
     collaborative: Array<{ _id: string; score: number }>,
     association: Array<{ _id: string; score: number }>,
     weights: HybridWeights,
@@ -20,18 +18,6 @@ export class RecommendationEngine {
   ): RecommendationScore[] {
     // Aggregate scores from all algorithms
     const candidateScores = new Map<string, ScoreBreakdown>();
-
-    // Add content-based scores
-    for (const { _id, score } of contentBased) {
-      if (!candidateScores.has(_id)) {
-        candidateScores.set(_id, {
-          blendedScore: 0,
-          weights,
-        });
-      }
-      const breakdown = candidateScores.get(_id)!;
-      breakdown.contentBased = score;
-    }
 
     // Add collaborative scores
     for (const { _id, score } of collaborative) {
@@ -59,11 +45,10 @@ export class RecommendationEngine {
 
     // Calculate blended scores
     for (const [_id, breakdown] of candidateScores) {
-      const contentScore = (breakdown.contentBased || 0) * weights.contentBased;
       const collabScore = (breakdown.collaborative || 0) * weights.collaborative;
       const assocScore = (breakdown.association || 0) * weights.association;
 
-      breakdown.blendedScore = contentScore + collabScore + assocScore;
+      breakdown.blendedScore = collabScore + assocScore;
 
       candidateScores.set(_id, breakdown);
     }
@@ -88,60 +73,46 @@ export class RecommendationEngine {
    * Context-aware weight adjustment based on data availability
    */
   computeContextAwareWeights(
-    hasContentBased: boolean,
     hasCollaborative: boolean,
     hasAssociation: boolean,
     userHasPurchaseHistory: boolean
   ): HybridWeights {
     // Default weights
     let weights: HybridWeights = {
-      contentBased: 0.3,
-      collaborative: 0.4,
-      association: 0.3,
+      collaborative: 0.6,
+      association: 0.4,
     };
 
-    // Cold start: no purchase history - favor content-based
+    // Cold start: no purchase history - favor association rules
     if (!userHasPurchaseHistory) {
       weights = {
-        contentBased: 0.6,
-        collaborative: 0.2,
-        association: 0.2,
+        collaborative: 0.3,
+        association: 0.7,
       };
     }
 
     // Adjust based on available data
-    const availableAlgorithms = [hasContentBased, hasCollaborative, hasAssociation].filter(
-      Boolean
-    ).length;
+    const availableAlgorithms = [hasCollaborative, hasAssociation].filter(Boolean).length;
 
     if (availableAlgorithms === 0) {
       // Fallback: equal weights
-      return weights;
+      return { collaborative: 0.5, association: 0.5 };
     }
 
     // Redistribute weights if some algorithms have no data
-    if (!hasContentBased) {
-      weights.collaborative += weights.contentBased / 2;
-      weights.association += weights.contentBased / 2;
-      weights.contentBased = 0;
-    }
-
     if (!hasCollaborative) {
-      weights.contentBased += weights.collaborative / 2;
-      weights.association += weights.collaborative / 2;
+      weights.association = 1.0;
       weights.collaborative = 0;
     }
 
     if (!hasAssociation) {
-      weights.contentBased += weights.association / 2;
-      weights.collaborative += weights.association / 2;
+      weights.collaborative = 1.0;
       weights.association = 0;
     }
 
     // Normalize to sum to 1
-    const total = weights.contentBased + weights.collaborative + weights.association;
+    const total = weights.collaborative + weights.association;
     if (total > 0) {
-      weights.contentBased /= total;
       weights.collaborative /= total;
       weights.association /= total;
     }

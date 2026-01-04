@@ -51,7 +51,6 @@ recommendations/
 ## 🎯 **Features Implemented**
 
 ### **Core Functionality**
-- [x] **Content-Based Filtering**: Cosine similarity on product attributes
 - [x] **Collaborative Filtering**: Item-based using user purchase history
 - [x] **Association Rules**: Frequently bought together (co-occurrence mining)
 - [x] **Hybrid Recommendation Engine**: Weighted linear blending with context-aware weights
@@ -72,8 +71,7 @@ recommendations/
 - [x] **Version Management**: Keep last 3 versions (current, previous, archived)
 - [x] **Manual Rollback**: Admin API endpoint for emergency rollback
 - [x] **Cache Warming**: Top 100 products pre-loaded after batch promotion
-- [x] **Three Job Schedules**:
-  - Content-based: Daily at 2 AM
+- [x] **Two Job Schedules**:
   - Collaborative: Hourly
   - Association rules: Daily at 3 AM
 
@@ -85,7 +83,6 @@ recommendations/
 - [x] **Rate Limiting**: Three-tier (global, per-IP, debug)
 - [x] **Error Handling**: Centralized middleware with structured errors
 - [x] **Endpoints**:
-  - `GET /v1/products/:id/similar` - Content-based recommendations
   - `GET /v1/products/:id/frequently-bought-with` - Association rules
   - `GET /v1/users/:id/recommended` - Personalized (collaborative)
   - `GET /v1/products/:id/recommendations` - Hybrid
@@ -133,8 +130,7 @@ recommendations/
 1. **ADR-001**: Tiered Storage Architecture (MongoDB + Redis)
 2. **ADR-002**: Item-Based Collaborative Filtering
 3. **ADR-003**: Multiple Pre-Computation Schedules
-4. **ADR-004**: Cosine Similarity for Content-Based Filtering
-5. **ADR-005**: REST API Protocol
+4. **ADR-005**: REST API Protocol
 6. **ADR-006**: Association Rule Algorithm Selection
 7. **ADR-007**: Score Blending Strategy for Hybrid Recommendations
 8. **ADR-008**: Background Job Scheduler Selection (BullMQ)

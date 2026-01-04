@@ -293,7 +293,7 @@ Trigger initial batch jobs:
 ```bash
 # Via admin API
 curl -X POST -H "x-api-key: admin-key-prod-1" \
-  http://localhost:3000/debug/v1/trigger-batch/content-based
+  http://localhost:3000/debug/v1/trigger-batch/collaborative
 ```
 
 ## Health Checks

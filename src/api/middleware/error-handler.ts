@@ -17,7 +17,7 @@ export function errorHandler(error: Error, req: Request, res: Response, _next: N
   if (error instanceof ZodError) {
     res.status(400).json({
       error: 'Validation error',
-      details: error.errors,
+      details: error.issues,
     });
     return;
   }
