@@ -111,6 +111,103 @@ describe('RecommendationEngine', () => {
       expect(blended[0].breakdown).toHaveProperty('blendedScore');
       expect(blended[0].breakdown).toHaveProperty('weights');
     });
+
+    it('should always include both collaborative and association fields in breakdown', () => {
+      // Test case: product only in collaborative recommendations
+      const collaborative = [{ productId: 'P001', score: 0.8 }];
+      const association: Array<{ productId: string; score: number }> = [];
+
+      const weights = { collaborative: 1.0, association: 0.0 };
+
+      const blended = engine.blendRecommendations(
+        collaborative,
+        association,
+        weights,
+        10
+      );
+
+      expect(blended.length).toBeGreaterThan(0);
+      expect(blended[0].breakdown).toHaveProperty('collaborative', 0.8);
+      expect(blended[0].breakdown).toHaveProperty('association');
+      expect(blended[0].breakdown.association).toBeUndefined();
+      expect(blended[0].breakdown).toHaveProperty('blendedScore');
+      expect(blended[0].breakdown).toHaveProperty('weights');
+    });
+
+    it('should always include both collaborative and association fields when product only in association', () => {
+      // Test case: product only in association recommendations
+      const collaborative: Array<{ productId: string; score: number }> = [];
+      const association = [{ productId: 'P001', score: 0.7 }];
+
+      const weights = { collaborative: 0.0, association: 1.0 };
+
+      const blended = engine.blendRecommendations(
+        collaborative,
+        association,
+        weights,
+        10
+      );
+
+      expect(blended.length).toBeGreaterThan(0);
+      expect(blended[0].breakdown).toHaveProperty('collaborative');
+      expect(blended[0].breakdown.collaborative).toBeUndefined();
+      expect(blended[0].breakdown).toHaveProperty('association', 0.7);
+      expect(blended[0].breakdown).toHaveProperty('blendedScore');
+      expect(blended[0].breakdown).toHaveProperty('weights');
+    });
+
+    it('should include both fields for all products in mixed recommendations', () => {
+      // Test case: some products in both, some in only one
+      // Use high scores to ensure they pass MIN_SCORE_THRESHOLD (0.3)
+      const collaborative = [
+        { productId: 'P001', score: 0.8 },
+        { productId: 'P002', score: 0.9 },
+      ];
+      const association = [
+        { productId: 'P001', score: 0.7 },
+        { productId: 'P003', score: 0.8 },
+      ];
+
+      const weights = { collaborative: 0.6, association: 0.4 };
+
+      const blended = engine.blendRecommendations(
+        collaborative,
+        association,
+        weights,
+        10
+      );
+
+      // All results should have both fields
+      for (const rec of blended) {
+        expect(rec.breakdown).toHaveProperty('collaborative');
+        expect(rec.breakdown).toHaveProperty('association');
+        expect(rec.breakdown).toHaveProperty('blendedScore');
+        expect(rec.breakdown).toHaveProperty('weights');
+      }
+
+      // P001 should have both scores (blended: 0.8*0.6 + 0.7*0.4 = 0.48 + 0.28 = 0.76)
+      const p001 = blended.find((r) => r.productId === 'P001');
+      expect(p001).toBeDefined();
+      expect(p001!.breakdown.collaborative).toBe(0.8);
+      expect(p001!.breakdown.association).toBe(0.7);
+
+      // P002 should have collaborative but undefined association (blended: 0.9*0.6 = 0.54)
+      const p002 = blended.find((r) => r.productId === 'P002');
+      if (p002) {
+        expect(p002.breakdown.collaborative).toBe(0.9);
+        expect(p002.breakdown.association).toBeUndefined();
+      }
+
+      // P003 should have association but undefined collaborative (blended: 0.8*0.4 = 0.32)
+      const p003 = blended.find((r) => r.productId === 'P003');
+      if (p003) {
+        expect(p003.breakdown.collaborative).toBeUndefined();
+        expect(p003.breakdown.association).toBe(0.8);
+      }
+
+      // At least P001 should be present (has both scores, highest blended score)
+      expect(p001).toBeDefined();
+    });
   });
 
   describe('computeContextAwareWeights', () => {

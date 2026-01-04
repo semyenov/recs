@@ -19,13 +19,18 @@ export class RecommendationEngine {
     // Aggregate scores from all algorithms
     const candidateScores = new Map<string, ScoreBreakdown>();
 
+    // Helper function to create a new breakdown with both fields initialized
+    const createBreakdown = (): ScoreBreakdown => ({
+      collaborative: undefined,
+      association: undefined,
+      blendedScore: 0,
+      weights,
+    });
+
     // Add collaborative scores
     for (const { productId, score } of collaborative) {
       if (!candidateScores.has(productId)) {
-        candidateScores.set(productId, {
-          blendedScore: 0,
-          weights,
-        });
+        candidateScores.set(productId, createBreakdown());
       }
       const breakdown = candidateScores.get(productId)!;
       breakdown.collaborative = score;
@@ -34,10 +39,7 @@ export class RecommendationEngine {
     // Add association scores
     for (const { productId, score } of association) {
       if (!candidateScores.has(productId)) {
-        candidateScores.set(productId, {
-          blendedScore: 0,
-          weights,
-        });
+        candidateScores.set(productId, createBreakdown());
       }
       const breakdown = candidateScores.get(productId)!;
       breakdown.association = score;

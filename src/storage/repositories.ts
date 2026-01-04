@@ -423,4 +423,49 @@ export class RecommendationRepository {
     const db = mongoClient.getDb();
     return await db.collection<Recommendation>('recommendations').countDocuments({ version });
   }
+
+  /**
+   * Get the current active batch version from MongoDB
+   * This provides persistence across Redis failures
+   */
+  async getActiveBatchVersion(): Promise<string | null> {
+    const db = mongoClient.getDb();
+    const versionDoc = await db.collection<{ version: string; updatedAt: Date }>('batch_versions')
+      .findOne({}, { sort: { updatedAt: -1 } });
+    return versionDoc?.version || null;
+  }
+
+  /**
+   * Set the active batch version in MongoDB
+   * This provides persistence across Redis failures
+   */
+  async setActiveBatchVersion(version: string): Promise<void> {
+    const db = mongoClient.getDb();
+    await db.collection('batch_versions').updateOne(
+      { version },
+      {
+        $set: {
+          version,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+  }
+
+  /**
+   * Clear old batch versions (cleanup)
+   * Removes versions older than specified days
+   */
+  async clearOldBatchVersions(olderThanDays: number = 7): Promise<number> {
+    const db = mongoClient.getDb();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    
+    const result = await db.collection('batch_versions').deleteMany({
+      updatedAt: { $lt: cutoffDate },
+    });
+    
+    return result.deletedCount;
+  }
 }

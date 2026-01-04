@@ -27,47 +27,94 @@ export class BatchExecutor {
    * This ensures both collaborative and association jobs use the same version,
    * enabling hybrid recommendation generation to work correctly.
    * 
-   * The version is stored in Redis with a 1-hour TTL to prevent stale versions
-   * from being reused if jobs fail or are abandoned.
+   * The version is stored in both MongoDB (for persistence) and Redis (for fast access)
+   * with a 24-hour TTL in Redis. MongoDB provides persistence across Redis failures.
    * 
    * @returns Version string (e.g., "v1234567890")
    */
   private async getOrCreateSharedVersion(): Promise<string> {
     const VERSION_KEY = 'rec:batch_version';
-    const VERSION_TTL = 3600; // 1 hour
+    const VERSION_TTL = 86400; // 24 hours (extended from 1 hour for persistence)
 
     try {
-      // Try to get existing version from Redis
-      const existingVersion = await redisClient.get<string>(VERSION_KEY);
-      
-      if (existingVersion) {
-        logger.info('Using existing shared version from Redis', { version: existingVersion });
-        return existingVersion;
+      // First, try to get version from MongoDB (most persistent)
+      const mongoVersion = await this.recommendationRepo.getActiveBatchVersion();
+      if (mongoVersion) {
+        logger.info('Using existing shared version from MongoDB', { version: mongoVersion });
+        
+        // Also update Redis cache if available
+        try {
+          await redisClient.set(VERSION_KEY, mongoVersion, VERSION_TTL);
+        } catch (redisError) {
+          logger.warn('Failed to update Redis cache with MongoDB version', {
+            version: mongoVersion,
+            error: redisError,
+          });
+        }
+        
+        return mongoVersion;
       }
 
-      // No existing version, create a new one
-      const newVersion = `v${Date.now()}`;
-      
+      // Try Redis as fallback (faster, but less persistent)
       try {
-        // Store in Redis with TTL
-        await redisClient.set(VERSION_KEY, newVersion, VERSION_TTL);
-        logger.info('Created new shared version and stored in Redis', {
-          version: newVersion,
-          ttl: VERSION_TTL,
-        });
+        const redisVersion = await redisClient.get<string>(VERSION_KEY);
+        if (redisVersion) {
+          logger.info('Using existing shared version from Redis', { version: redisVersion });
+          
+          // Sync to MongoDB for persistence
+          try {
+            await this.recommendationRepo.setActiveBatchVersion(redisVersion);
+          } catch (mongoError) {
+            logger.warn('Failed to sync Redis version to MongoDB', {
+              version: redisVersion,
+              error: mongoError,
+            });
+          }
+          
+          return redisVersion;
+        }
       } catch (redisError) {
-        // If Redis set fails, log warning but continue with local version
-        logger.warn('Failed to store version in Redis, using local version', {
-          version: newVersion,
+        logger.warn('Failed to get version from Redis, will check MongoDB and create new if needed', {
           error: redisError,
         });
       }
 
+      // No existing version found, create a new one
+      const newVersion = `v${Date.now()}`;
+      logger.info('Creating new shared version', { version: newVersion });
+
+      // Store in MongoDB first (most important for persistence)
+      try {
+        await this.recommendationRepo.setActiveBatchVersion(newVersion);
+        logger.info('Stored new version in MongoDB', { version: newVersion });
+      } catch (mongoError) {
+        logger.error('Failed to store version in MongoDB', {
+          version: newVersion,
+          error: mongoError,
+        });
+        // Continue anyway - Redis might still work
+      }
+
+      // Also store in Redis for fast access
+      try {
+        await redisClient.set(VERSION_KEY, newVersion, VERSION_TTL);
+        logger.info('Stored new version in Redis', {
+          version: newVersion,
+          ttl: VERSION_TTL,
+        });
+      } catch (redisError) {
+        logger.warn('Failed to store version in Redis', {
+          version: newVersion,
+          error: redisError,
+        });
+        // MongoDB storage succeeded, so we can continue
+      }
+
       return newVersion;
     } catch (error) {
-      // If Redis get fails, create new version locally
+      // Last resort: create version locally (should rarely happen)
       const fallbackVersion = `v${Date.now()}`;
-      logger.warn('Failed to get version from Redis, using fallback version', {
+      logger.error('Failed to get or create version, using fallback', {
         version: fallbackVersion,
         error,
       });
@@ -111,6 +158,7 @@ export class BatchExecutor {
             score: s.score,
             breakdown: {
               collaborative: s.score,
+              association: undefined,
               blendedScore: s.score,
               weights: { collaborative: 1, association: 0 },
             },
@@ -207,6 +255,7 @@ export class BatchExecutor {
             productId: rule.consequent,
             score: rule.confidence,
             breakdown: {
+              collaborative: undefined,
               association: rule.confidence,
               blendedScore: rule.confidence,
               weights: { collaborative: 0, association: 1 },
@@ -260,7 +309,24 @@ export class BatchExecutor {
     try {
       // Step 1: Load recommendations from both algorithms for the shared version
       logger.info('Loading recommendations for hybrid blending', { batchId, version });
+      
+      // Verify version exists in MongoDB before querying
+      const mongoVersion = await this.recommendationRepo.getActiveBatchVersion();
+      if (mongoVersion && mongoVersion !== version) {
+        logger.warn('Version mismatch detected between requested and MongoDB stored version', {
+          batchId,
+          requestedVersion: version,
+          mongoVersion,
+          message: 'This may indicate a versioning issue. Proceeding with requested version.',
+        });
+      }
+      
       const allVersionRecs = await this.recommendationRepo.findByVersion(version);
+      logger.info('Loaded all recommendations for version', {
+        batchId,
+        version,
+        totalRecommendations: allVersionRecs.length,
+      });
 
       // Filter to get algorithm-specific recommendations
       const collaborativeRecs = allVersionRecs.filter(
@@ -277,7 +343,15 @@ export class BatchExecutor {
         associationCount: associationRecs.length,
       });
 
-      // Step 2: Validate that we have recommendations from both algorithms
+      // Step 2: Validate version consistency and data availability
+      this.validateVersionConsistency(
+        version,
+        collaborativeRecs,
+        associationRecs,
+        batchId
+      );
+
+      // Step 3: Validate that we have recommendations from both algorithms
       if (collaborativeRecs.length === 0) {
         logger.error('Cannot generate hybrid recommendations: no collaborative recommendations found', {
           batchId,
@@ -340,6 +414,134 @@ export class BatchExecutor {
     } catch (error) {
       logger.error('❌ Hybrid recommendations batch job failed', { batchId, error });
       throw error;
+    }
+  }
+
+  /**
+   * Validates version consistency and data availability for hybrid recommendations
+   * 
+   * Checks that:
+   * - All recommendations have the same version
+   * - Both algorithm types exist for the version
+   * - There's product overlap between algorithms (where possible)
+   * 
+   * @param version - The version to validate
+   * @param collaborativeRecs - Collaborative filtering recommendations
+   * @param associationRecs - Association rules recommendations
+   * @param batchId - Batch ID for logging
+   */
+  private validateVersionConsistency(
+    version: string,
+    collaborativeRecs: Recommendation[],
+    associationRecs: Recommendation[],
+    batchId: string
+  ): void {
+    logger.info('Validating version consistency', {
+      batchId,
+      version,
+      collaborativeCount: collaborativeRecs.length,
+      associationCount: associationRecs.length,
+    });
+
+    // Check that all collaborative recommendations have the correct version
+    const collaborativeVersionMismatches = collaborativeRecs.filter(
+      (rec) => rec.version !== version
+    );
+    if (collaborativeVersionMismatches.length > 0) {
+      logger.error('Version mismatch detected in collaborative recommendations', {
+        batchId,
+        expectedVersion: version,
+        mismatchedCount: collaborativeVersionMismatches.length,
+        sampleMismatches: collaborativeVersionMismatches.slice(0, 5).map((r) => ({
+          productId: r.productId,
+          version: r.version,
+        })),
+      });
+      throw new Error(
+        `Version mismatch: Found ${collaborativeVersionMismatches.length} collaborative recommendations with different versions. Expected: ${version}`
+      );
+    }
+
+    // Check that all association recommendations have the correct version
+    const associationVersionMismatches = associationRecs.filter(
+      (rec) => rec.version !== version
+    );
+    if (associationVersionMismatches.length > 0) {
+      logger.error('Version mismatch detected in association recommendations', {
+        batchId,
+        expectedVersion: version,
+        mismatchedCount: associationVersionMismatches.length,
+        sampleMismatches: associationVersionMismatches.slice(0, 5).map((r) => ({
+          productId: r.productId,
+          version: r.version,
+        })),
+      });
+      throw new Error(
+        `Version mismatch: Found ${associationVersionMismatches.length} association recommendations with different versions. Expected: ${version}`
+      );
+    }
+
+    // Check product overlap between algorithms
+    const collaborativeProductIds = new Set(collaborativeRecs.map((r) => r.productId));
+    const associationProductIds = new Set(associationRecs.map((r) => r.productId));
+    const overlappingProducts = new Set(
+      [...collaborativeProductIds].filter((id) => associationProductIds.has(id))
+    );
+
+    // Calculate detailed statistics
+    const collaborativeOnly = new Set(
+      [...collaborativeProductIds].filter((id) => !associationProductIds.has(id))
+    );
+    const associationOnly = new Set(
+      [...associationProductIds].filter((id) => !collaborativeProductIds.has(id))
+    );
+
+    const overlapPercentage =
+      collaborativeProductIds.size > 0
+        ? ((overlappingProducts.size / collaborativeProductIds.size) * 100).toFixed(1)
+        : '0.0';
+
+    logger.info('Version consistency validation completed', {
+      batchId,
+      version,
+      collaborativeProducts: collaborativeProductIds.size,
+      associationProducts: associationProductIds.size,
+      overlappingProducts: overlappingProducts.size,
+      collaborativeOnly: collaborativeOnly.size,
+      associationOnly: associationOnly.size,
+      overlapPercentage,
+      summary: {
+        totalUniqueProducts: new Set([...collaborativeProductIds, ...associationProductIds]).size,
+        productsWithBothAlgorithms: overlappingProducts.size,
+        productsWithOnlyCollaborative: collaborativeOnly.size,
+        productsWithOnlyAssociation: associationOnly.size,
+      },
+    });
+
+    // Warn if there's very little overlap (but don't fail - some products may only have one algorithm)
+    if (overlappingProducts.size === 0 && collaborativeProductIds.size > 0 && associationProductIds.size > 0) {
+      logger.warn('No product overlap between collaborative and association recommendations', {
+        batchId,
+        version,
+        collaborativeProducts: collaborativeProductIds.size,
+        associationProducts: associationProductIds.size,
+        message:
+          'This may result in hybrid recommendations with missing collaborative or association scores',
+      });
+    } else if (overlappingProducts.size < Math.min(collaborativeProductIds.size, associationProductIds.size) * 0.1) {
+      logger.warn('Low product overlap between collaborative and association recommendations', {
+        batchId,
+        version,
+        overlappingProducts: overlappingProducts.size,
+        collaborativeProducts: collaborativeProductIds.size,
+        associationProducts: associationProductIds.size,
+        overlapPercentage:
+          collaborativeProductIds.size > 0
+            ? ((overlappingProducts.size / collaborativeProductIds.size) * 100).toFixed(1)
+            : '0.0',
+        message:
+          'Many hybrid recommendations may have missing collaborative or association scores',
+      });
     }
   }
 
@@ -621,5 +823,76 @@ export class BatchExecutor {
       version,
       totalProducts: products.length,
     });
+  }
+
+  /**
+   * Cleans up old batch versions and their associated recommendations
+   * 
+   * This method removes versions older than the specified number of days.
+   * It cleans up both MongoDB batch_versions collection and the recommendations
+   * stored for those versions.
+   * 
+   * @param olderThanDays - Number of days to keep versions (default: 7)
+   * @returns Number of versions cleaned up
+   */
+  async cleanupOldVersions(olderThanDays: number = 7): Promise<number> {
+    logger.info('Starting version cleanup', { olderThanDays });
+
+    try {
+      // Clean up old batch versions from MongoDB
+      const deletedVersions = await this.recommendationRepo.clearOldBatchVersions(olderThanDays);
+      logger.info('Cleaned up old batch versions from MongoDB', {
+        deletedVersions,
+        olderThanDays,
+      });
+
+      // Note: We don't automatically delete recommendations for old versions
+      // as they may still be referenced. Manual cleanup can be done if needed.
+      // To delete recommendations for old versions, use:
+      // await this.recommendationRepo.deleteByVersion(version);
+
+      return deletedVersions;
+    } catch (error) {
+      logger.error('Failed to cleanup old versions', { error, olderThanDays });
+      throw error;
+    }
+  }
+
+  /**
+   * Explicitly clears the current batch version
+   * 
+   * This should be called when all jobs for a version are complete
+   * and you want to start fresh with a new version.
+   * 
+   * @param version - The version to clear (optional, clears current if not provided)
+   */
+  async clearBatchVersion(version?: string): Promise<void> {
+    const VERSION_KEY = 'rec:batch_version';
+
+    try {
+      if (version) {
+        // Clear specific version
+        logger.info('Clearing specific batch version', { version });
+        
+        // Clear from Redis
+        try {
+          await redisClient.del(VERSION_KEY);
+        } catch (redisError) {
+          logger.warn('Failed to clear version from Redis', { version, error: redisError });
+        }
+
+        // Note: MongoDB batch_versions collection keeps history
+        // We don't delete it here as it serves as a record
+      } else {
+        // Clear current version from Redis (MongoDB keeps history)
+        logger.info('Clearing current batch version from Redis');
+        await redisClient.del(VERSION_KEY);
+      }
+
+      logger.info('Batch version cleared successfully', { version });
+    } catch (error) {
+      logger.error('Failed to clear batch version', { version, error });
+      throw error;
+    }
   }
 }

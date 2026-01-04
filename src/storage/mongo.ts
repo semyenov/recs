@@ -81,6 +81,12 @@ class MongoDBClient {
         { key: { createdAt: -1 } },
       ]);
 
+    // Batch versions collection indexes (for version persistence)
+    await this.db.collection('batch_versions').createIndexes([
+      { key: { version: 1 }, unique: true },
+      { key: { updatedAt: -1 } },
+    ]);
+
     logger.info('✅ MongoDB indexes created successfully');
   }
 }
