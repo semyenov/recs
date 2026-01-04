@@ -12,7 +12,7 @@
 /* eslint-disable no-console */
 import './src/test/test-env'; // Load environment
 import { mongoClient } from '../src/storage/mongo';
-import { Product, Order } from '../src/types';
+import { Product, Order, ProductInOrder } from '../src/types';
 
 const CATEGORIES = ['Electronics', 'Clothing', 'Books', 'Home & Garden', 'Sports'];
 
@@ -63,20 +63,28 @@ function generateProducts(count: number): Product[] {
     const category = randomChoice(CATEGORIES);
     const baseName = randomChoice(PRODUCT_NAMES[category as keyof typeof PRODUCT_NAMES]);
     const variant = randomChoice(['Pro', 'Plus', 'Lite', 'Max', 'Mini', 'Standard']);
+    const productId = `P${String(i).padStart(4, '0')}`;
+    const price = randomFloat(9.99, 999.99);
+    const brand = randomChoice(['BrandA', 'BrandB', 'BrandC', 'BrandD']);
+    const color = randomChoice(['Black', 'White', 'Silver', 'Blue', 'Red']);
 
     products.push({
-      _id: `${i}`,
-      productId: `P${String(i).padStart(4, '0')}`,
+      _id: productId,
+      code: productId,
       name: `${baseName} ${variant}`,
+      fullName: `${brand} ${baseName} ${variant}`,
+      brand,
       category,
-      technicalProperties: {
-        size: randomFloat(1, 100),
-        price: randomFloat(9.99, 999.99),
-        weight: randomFloat(0.1, 50),
-        color: randomChoice(['Black', 'White', 'Silver', 'Blue', 'Red']),
-        brand: randomChoice(['BrandA', 'BrandB', 'BrandC', 'BrandD']),
-        rating: randomFloat(3, 5),
+      attributes: {
+        size: { name: 'Size', value: randomFloat(1, 100) },
+        weight: { name: 'Weight', value: randomFloat(0.1, 50) },
+        color: { name: 'Color', value: color },
+        rating: { name: 'Rating', value: randomFloat(3, 5) },
       },
+      prices: {
+        default: price,
+      },
+      enabled: true,
       createdAt: new Date(Date.now() - randomInt(0, 365) * 24 * 60 * 60 * 1000),
       updatedAt: new Date(),
     });
@@ -114,26 +122,46 @@ function generateOrders(products: Product[], orderCount: number, userCount: numb
       orderProducts.push(product);
     }
 
-    // Remove duplicates
-    const uniqueProducts = Array.from(new Set(orderProducts.map((p) => p.productId))).map(
-      (id) => orderProducts.find((p) => p.productId === id)!
-    );
+    // Remove duplicates and count quantities
+    const productCounts = new Map<string, { product: Product; quantity: number }>();
+    orderProducts.forEach((p) => {
+      const productId = p._id;
+      const existing = productCounts.get(productId);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        productCounts.set(productId, { product: p, quantity: randomInt(1, 3) });
+      }
+    });
 
-    const items = uniqueProducts.map((p) => ({
-      productId: p.productId,
-      quantity: randomInt(1, 3),
-      price: (p.technicalProperties.price as number) || 0,
-    }));
+    // Build products dictionary and calculate summary
+    const orderProductsDict: { [productId: string]: ProductInOrder } = {};
+    let summary = 0;
 
-    const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    productCounts.forEach(({ product, quantity }) => {
+      const productId = product._id;
+      const price = product.prices?.default || 0;
+      orderProductsDict[productId] = {
+        name: product.name || product.fullName || 'Unknown Product',
+        price,
+        quantity,
+        status: 'completed',
+      };
+      summary += price * quantity;
+    });
+
+    const orderDate = new Date(Date.now() - randomInt(0, 180) * 24 * 60 * 60 * 1000);
 
     orders.push({
-      _id: `${i}`,
-      orderId: `O${String(i).padStart(5, '0')}`,
-      userId,
-      items,
-      totalAmount,
-      orderDate: new Date(Date.now() - randomInt(0, 180) * 24 * 60 * 60 * 1000),
+      _id: `O${String(i).padStart(5, '0')}`,
+      number: `O${String(i).padStart(5, '0')}`,
+      contragentId: userId,
+      products: orderProductsDict,
+      summary,
+      date: orderDate,
+      createdDate: orderDate,
+      status: 'completed',
+      enabled: true,
       createdAt: new Date(),
     });
   }
@@ -179,11 +207,9 @@ async function seedDatabase(): Promise<void> {
     console.log(`   Orders: ${orders.length}`);
     console.log(`   Unique Users: 200`);
     console.log(
-      `   Avg Items per Order: ${(orders.reduce((sum, o) => sum + o.items.length, 0) / orders.length).toFixed(2)}`
+      `   Avg Items per Order: ${(orders.reduce((sum, o) => sum + Object.keys(o.products).length, 0) / orders.length).toFixed(2)}`
     );
-    console.log(
-      `   Total Revenue: $${orders.reduce((sum, o) => sum + o.totalAmount, 0).toFixed(2)}`
-    );
+    console.log(`   Total Revenue: $${orders.reduce((sum, o) => sum + o.summary, 0).toFixed(2)}`);
 
     // Category distribution
     console.log('\n📈 Products by Category:');
