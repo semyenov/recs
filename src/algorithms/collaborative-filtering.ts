@@ -5,6 +5,10 @@ import Piscina from 'piscina';
 import { resolve } from 'path';
 import type { WorkerChunk, WorkerResult } from './collaborative-filtering-worker';
 import { Heap } from 'heap-js';
+import {
+  computeSimilarityMatrixOptimized,
+  shouldUseMatrixOperations,
+} from '../utils/matrix-ops';
 
 /**
  * Wrapper around heap-js Heap for maintaining top-N items efficiently
@@ -114,9 +118,42 @@ export class CollaborativeFilter {
     }
 
     const allProducts = Array.from(productContragents.keys());
+    
+    // Calculate average contragents per product for matrix optimization decision
+    const totalContragents = new Set<string>();
+    let totalContragentCount = 0;
+    for (const contragents of productContragents.values()) {
+      for (const contragentId of contragents) {
+        totalContragents.add(contragentId);
+      }
+      totalContragentCount += contragents.size;
+    }
+    const numContragents = totalContragents.size;
+    const avgContragentsPerProduct = allProducts.length > 0 ? totalContragentCount / allProducts.length : 0;
+
     logger.info(
-      `[CollaborativeFilter] Built interaction matrix: ${productContragents.size} products`
+      `[CollaborativeFilter] Built interaction matrix: ${productContragents.size} products, ${numContragents} contragents (avg ${avgContragentsPerProduct.toFixed(1)} contragents/product)`
     );
+
+    // Decide whether to use matrix operations
+    const useMatrixOps = shouldUseMatrixOperations(
+      allProducts.length,
+      numContragents,
+      avgContragentsPerProduct
+    );
+
+    if (useMatrixOps) {
+      logger.info('[CollaborativeFilter] Using optimized matrix operations for similarity computation');
+      try {
+        return computeSimilarityMatrixOptimized(productContragents, minCommonUsers, topN);
+      } catch (error) {
+        logger.warn(
+          '[CollaborativeFilter] Matrix operations failed, falling back to sequential computation',
+          { error }
+        );
+        // Fall through to sequential computation
+      }
+    }
 
     // Decide whether to use parallel processing
     const shouldUseParallel = enableParallel && allProducts.length >= productCountThreshold;

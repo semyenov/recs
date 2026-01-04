@@ -49,6 +49,7 @@
     "ioredis": "^5.8.2",
     "mathjs": "^15.1.0",
     "ml-distance": "^4.0.1",
+    "ml-matrix": "^6.10.4",
     "mongodb": "^7.0.0",
     "opossum": "^9.0.0",
     "piscina": "^5.1.4",
