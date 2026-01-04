@@ -292,15 +292,15 @@ export class BatchExecutor {
   /**
    * Quality gates ensure recommendations meet minimum quality standards before promotion.
    *
-   * Algorithm-specific thresholds:
+   * Algorithm-specific thresholds (configurable via environment variables):
    * - collaborative:
-   *   - avgScore >= 0.15: Recommendations must have at least a 0.15 average similarity/confidence score
-   *   - coverage >= 0.2: At least 20% of products must have recommendations
-   *   - diversityScore >= 0.001: Recommendations must cover at least 0.1% unique products
+   *   - avgScore >= QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD
+   *   - coverage >= QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD
+   *   - diversityScore >= QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD
    * - association:
-   *   - avgScore >= 0.15: Recommendations must have at least a 0.15 average similarity/confidence score
-   *   - coverage >= 0.005: At least 0.5% of products must have recommendations (lower threshold for association rules)
-   *   - diversityScore >= 0.001: Recommendations must cover at least 0.1% unique products
+   *   - avgScore >= QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD
+   *   - coverage >= QUALITY_ASSOCIATION_COVERAGE_THRESHOLD
+   *   - diversityScore >= QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD
    *
    * All thresholds must pass for the version to be promoted. If any threshold fails,
    * the recommendations are considered too low quality for production use.
@@ -309,18 +309,18 @@ export class BatchExecutor {
     metrics: QualityMetrics,
     algorithmType: 'collaborative' | 'association' = 'collaborative'
   ): Promise<boolean> {
-    // Algorithm-specific thresholds
+    // Algorithm-specific thresholds from config
     const thresholds =
       algorithmType === 'association'
         ? {
-            avgScore: 0.15, // Minimum average recommendation score
-            coverage: 0.005, // Minimum 0.5% product coverage (lower for association rules)
-            diversityScore: 0.001, // Minimum diversity (0.1% unique products)
+            avgScore: config.QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD,
+            coverage: config.QUALITY_ASSOCIATION_COVERAGE_THRESHOLD,
+            diversityScore: config.QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD,
           }
         : {
-            avgScore: 0.15, // Minimum average recommendation score
-            coverage: 0.2, // Minimum 20% product coverage
-            diversityScore: 0.001, // Minimum diversity (0.1% unique products)
+            avgScore: config.QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD,
+            coverage: config.QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD,
+            diversityScore: config.QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD,
           };
 
     logger.info('Evaluating quality gates', { metrics, thresholds, algorithmType });

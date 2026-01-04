@@ -62,6 +62,20 @@ const envSchema = z.object({
   // Monitoring
   ENABLE_METRICS: z.coerce.boolean().default(true),
   METRICS_PORT: z.coerce.number().int().positive().default(9090),
+
+  // Quality Metrics Thresholds - Collaborative Filtering
+  QUALITY_COLLABORATIVE_AVG_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.15),
+  QUALITY_COLLABORATIVE_COVERAGE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.2),
+  QUALITY_COLLABORATIVE_DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
+
+  // Quality Metrics Thresholds - Association Rules
+  QUALITY_ASSOCIATION_AVG_SCORE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.15),
+  QUALITY_ASSOCIATION_COVERAGE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.005),
+  QUALITY_ASSOCIATION_DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
+
+  // Quality Metrics - Optional Precision/Recall
+  QUALITY_PRECISION_AT_K: z.coerce.number().int().positive().default(10),
+  QUALITY_RECALL_AT_K: z.coerce.number().int().positive().default(10),
 });
 
 // Validate and export
