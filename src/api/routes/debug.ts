@@ -92,12 +92,13 @@ router.post('/rollback', requireAdmin, async (_req, res, next) => {
  * Job types:
  * - collaborative: Computes item-based similarities from user orders
  * - association-rules: Mines frequently bought together patterns
+ * - hybrid: Blends collaborative and association recommendations
  */
 router.post('/trigger-batch/:jobType', requireAdmin, debugRateLimiter, async (req, res, next) => {
   try {
     const { jobType } = req.params;
 
-    const validJobTypes = ['collaborative', 'association-rules'];
+    const validJobTypes = ['collaborative', 'association-rules', 'hybrid'];
     if (!validJobTypes.includes(jobType)) {
       res.status(400).json({
         error: 'Invalid job type',
@@ -118,6 +119,7 @@ router.post('/trigger-batch/:jobType', requireAdmin, debugRateLimiter, async (re
     const jobNameMap: Record<string, string> = {
       collaborative: 'compute-collaborative',
       'association-rules': 'compute-association-rules',
+      hybrid: 'compute-hybrid',
     };
 
     const jobName = jobNameMap[jobType];

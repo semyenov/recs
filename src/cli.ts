@@ -44,9 +44,12 @@ async function runJob(jobName: string): Promise<void> {
       case 'association-rules':
         await batchExecutor.executeAssociationRulesJob(job);
         break;
+      case 'hybrid':
+        await batchExecutor.executeHybridJob(job);
+        break;
       default:
         throw new Error(
-          `Unknown job name: ${jobName}. Supported jobs: collaborative, association-rules`
+          `Unknown job name: ${jobName}. Supported jobs: collaborative, association-rules, hybrid`
         );
     }
 
@@ -126,7 +129,7 @@ program
 program
   .command('job')
   .description('Run a specific batch job directly')
-  .argument('<job-name>', 'Job name: collaborative or association-rules')
+  .argument('<job-name>', 'Job name: collaborative, association-rules, or hybrid')
   .action(async (jobName: string) => {
     setupGracefulShutdown();
     await runJob(jobName);

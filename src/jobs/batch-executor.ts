@@ -130,31 +130,6 @@ export class BatchExecutor {
       await this.recommendationRepo.bulkUpsert(recommendations);
       logger.info('Recommendations saved successfully', { batchId });
 
-      // Step 3.5: Generate hybrid recommendations
-      logger.info('Generating hybrid recommendations', { batchId, version });
-      const hybridRecommendations = await this.generateHybridRecommendations(
-        'collaborative',
-        recommendations,
-        version,
-        batchId
-      );
-      if (hybridRecommendations.length > 0) {
-        logger.info('Saving hybrid recommendations', {
-          batchId,
-          version,
-          count: hybridRecommendations.length,
-        });
-        await this.recommendationRepo.bulkUpsert(hybridRecommendations);
-        logger.info('Hybrid recommendations saved successfully', { batchId });
-
-        // Validate hybrid recommendations quality
-        logger.info('Validating hybrid recommendation quality', { batchId, version });
-        const hybridMetrics = await this.validateQuality(hybridRecommendations);
-        logger.info('Hybrid quality metrics calculated', { batchId, version, metrics: hybridMetrics });
-      } else {
-        logger.warn('No hybrid recommendations generated', { batchId, version });
-      }
-
       // Step 4: Quality validation and promotion
       // Calculate quality metrics for monitoring and logging:
       // - Average score: Mean recommendation score across all recommendations
@@ -252,31 +227,6 @@ export class BatchExecutor {
       await this.recommendationRepo.bulkUpsert(recommendations);
       logger.info('Recommendations saved successfully', { batchId });
 
-      // Step 3.5: Generate hybrid recommendations
-      logger.info('Generating hybrid recommendations', { batchId, version });
-      const hybridRecommendations = await this.generateHybridRecommendations(
-        'association',
-        recommendations,
-        version,
-        batchId
-      );
-      if (hybridRecommendations.length > 0) {
-        logger.info('Saving hybrid recommendations', {
-          batchId,
-          version,
-          count: hybridRecommendations.length,
-        });
-        await this.recommendationRepo.bulkUpsert(hybridRecommendations);
-        logger.info('Hybrid recommendations saved successfully', { batchId });
-
-        // Validate hybrid recommendations quality
-        logger.info('Validating hybrid recommendation quality', { batchId, version });
-        const hybridMetrics = await this.validateQuality(hybridRecommendations);
-        logger.info('Hybrid quality metrics calculated', { batchId, version, metrics: hybridMetrics });
-      } else {
-        logger.warn('No hybrid recommendations generated', { batchId, version });
-      }
-
       // Step 4: Quality validation and promotion
       // Calculate quality metrics for monitoring and logging:
       // - Average score: Mean recommendation score across all recommendations
@@ -296,6 +246,99 @@ export class BatchExecutor {
       });
     } catch (error) {
       logger.error('❌ Association rules batch job failed', { batchId, error });
+      throw error;
+    }
+  }
+
+  async executeHybridJob(_job: Job): Promise<void> {
+    const batchId = uuidv4();
+    const version = await this.getOrCreateSharedVersion();
+    const startTime = Date.now();
+
+    logger.info('Starting hybrid recommendations batch job', { batchId, version });
+
+    try {
+      // Step 1: Load recommendations from both algorithms for the shared version
+      logger.info('Loading recommendations for hybrid blending', { batchId, version });
+      const allVersionRecs = await this.recommendationRepo.findByVersion(version);
+
+      // Filter to get algorithm-specific recommendations
+      const collaborativeRecs = allVersionRecs.filter(
+        (rec) => rec.algorithmType === 'collaborative'
+      );
+      const associationRecs = allVersionRecs.filter(
+        (rec) => rec.algorithmType === 'association'
+      );
+
+      logger.info('Loaded recommendations from both algorithms', {
+        batchId,
+        version,
+        collaborativeCount: collaborativeRecs.length,
+        associationCount: associationRecs.length,
+      });
+
+      // Step 2: Validate that we have recommendations from both algorithms
+      if (collaborativeRecs.length === 0) {
+        logger.error('Cannot generate hybrid recommendations: no collaborative recommendations found', {
+          batchId,
+          version,
+        });
+        throw new Error(
+          `No collaborative recommendations found for version ${version}. Run collaborative job first.`
+        );
+      }
+
+      if (associationRecs.length === 0) {
+        logger.error('Cannot generate hybrid recommendations: no association recommendations found', {
+          batchId,
+          version,
+        });
+        throw new Error(
+          `No association recommendations found for version ${version}. Run association-rules job first.`
+        );
+      }
+
+      // Step 3: Generate hybrid recommendations
+      logger.info('Generating hybrid recommendations', { batchId, version });
+      const hybridRecommendations = await this.generateHybridRecommendations(
+        collaborativeRecs,
+        associationRecs,
+        version,
+        batchId
+      );
+
+      if (hybridRecommendations.length === 0) {
+        logger.warn('No hybrid recommendations generated', { batchId, version });
+        logger.info('✅ Hybrid recommendations batch job completed (no recommendations generated)', {
+          batchId,
+          version,
+          duration: Date.now() - startTime,
+        });
+        return;
+      }
+
+      // Step 4: Save hybrid recommendations
+      logger.info('Saving hybrid recommendations', {
+        batchId,
+        version,
+        count: hybridRecommendations.length,
+      });
+      await this.recommendationRepo.bulkUpsert(hybridRecommendations);
+      logger.info('Hybrid recommendations saved successfully', { batchId });
+
+      // Step 5: Validate quality metrics
+      logger.info('Validating hybrid recommendation quality', { batchId, version });
+      const metrics = await this.validateQuality(hybridRecommendations);
+      logger.info('Hybrid quality metrics calculated', { batchId, version, metrics });
+
+      logger.info('✅ Hybrid recommendations batch job completed', {
+        batchId,
+        version,
+        duration: Date.now() - startTime,
+        hybridCount: hybridRecommendations.length,
+      });
+    } catch (error) {
+      logger.error('❌ Hybrid recommendations batch job failed', { batchId, error });
       throw error;
     }
   }
@@ -378,82 +421,76 @@ export class BatchExecutor {
   /**
    * Generates hybrid recommendations by blending collaborative and association recommendations.
    * 
-   * This method loads recommendations from the other algorithm type for the same version,
-   * blends them per product using the RecommendationEngine, and returns hybrid recommendations.
+   * This method blends recommendations from both algorithms per product using the RecommendationEngine.
    * 
-   * Both algorithm types use the same version (ensured by getOrCreateSharedVersion()),
-   * which allows this method to find recommendations from the other algorithm type.
-   * 
-   * @param currentAlgorithmType - The algorithm type that was just processed
-   * @param currentRecommendations - The recommendations that were just generated
-   * @param version - The version string for this batch (shared between both algorithm types)
+   * @param collaborativeRecs - Collaborative filtering recommendations
+   * @param associationRecs - Association rules recommendations
+   * @param version - The version string for this batch
    * @param batchId - The batch ID for logging
    * @returns Array of hybrid recommendations, or empty array if blending is not possible
    */
   private async generateHybridRecommendations(
-    currentAlgorithmType: 'collaborative' | 'association',
-    currentRecommendations: Recommendation[],
+    collaborativeRecs: Recommendation[],
+    associationRecs: Recommendation[],
     version: string,
     batchId: string
   ): Promise<Recommendation[]> {
     logger.info('Starting hybrid recommendation generation', {
       batchId,
       version,
-      currentAlgorithmType,
-      currentRecommendationCount: currentRecommendations.length,
+      collaborativeCount: collaborativeRecs.length,
+      associationCount: associationRecs.length,
     });
 
-    // If current recommendations are empty, cannot generate hybrid
-    if (currentRecommendations.length === 0) {
-      logger.warn('Cannot generate hybrid recommendations: current recommendations are empty', {
+    // If either recommendation set is empty, cannot generate hybrid
+    if (collaborativeRecs.length === 0 && associationRecs.length === 0) {
+      logger.warn('Cannot generate hybrid recommendations: both recommendation sets are empty', {
         batchId,
         version,
       });
       return [];
     }
 
-    // Determine the other algorithm type
-    const otherAlgorithmType =
-      currentAlgorithmType === 'collaborative' ? 'association' : 'collaborative';
+    if (collaborativeRecs.length === 0) {
+      logger.warn('Cannot generate hybrid recommendations: no collaborative recommendations found', {
+        batchId,
+        version,
+      });
+      return [];
+    }
 
-    // Load all recommendations for this version
-    logger.info('Loading recommendations for hybrid blending', {
-      batchId,
-      version,
-      otherAlgorithmType,
-    });
-    const allVersionRecs = await this.recommendationRepo.findByVersion(version);
-
-    // Filter to get the other algorithm's recommendations
-    const otherRecs = allVersionRecs.filter((rec) => rec.algorithmType === otherAlgorithmType);
-
-    if (otherRecs.length === 0) {
-      logger.warn(
-        `Cannot generate hybrid recommendations: no ${otherAlgorithmType} recommendations found for version`,
-        { batchId, version, otherAlgorithmType }
-      );
+    if (associationRecs.length === 0) {
+      logger.warn('Cannot generate hybrid recommendations: no association recommendations found', {
+        batchId,
+        version,
+      });
       return [];
     }
 
     logger.info('Found recommendations from both algorithms', {
       batchId,
       version,
-      currentCount: currentRecommendations.length,
-      otherCount: otherRecs.length,
+      collaborativeCount: collaborativeRecs.length,
+      associationCount: associationRecs.length,
     });
 
-    // Create a map of productId -> recommendations for quick lookup
-    const otherRecsMap = new Map<string, Recommendation>();
-    for (const rec of otherRecs) {
-      otherRecsMap.set(rec.productId, rec);
+    // Create maps of productId -> recommendations for quick lookup
+    const collaborativeRecsMap = new Map<string, Recommendation>();
+    for (const rec of collaborativeRecs) {
+      collaborativeRecsMap.set(rec.productId, rec);
+    }
+
+    const associationRecsMap = new Map<string, Recommendation>();
+    for (const rec of associationRecs) {
+      associationRecsMap.set(rec.productId, rec);
     }
 
     // Get all unique productIds that have recommendations in either algorithm
     const allProductIds = new Set<string>();
-    for (const rec of currentRecommendations) {
+    for (const rec of collaborativeRecs) {
       allProductIds.add(rec.productId);
     }
-    for (const rec of otherRecs) {
+    for (const rec of associationRecs) {
       allProductIds.add(rec.productId);
     }
 
@@ -475,20 +512,16 @@ export class BatchExecutor {
     const topN = config.PRE_COMPUTE_TOP_N;
 
     for (const productId of allProductIds) {
-      const currentRec = currentRecommendations.find((r) => r.productId === productId);
-      const otherRec = otherRecsMap.get(productId);
+      const collaborativeRec = collaborativeRecsMap.get(productId);
+      const associationRec = associationRecsMap.get(productId);
 
       // Convert to algorithm input format
-      const collaborative = currentRec && currentAlgorithmType === 'collaborative'
-        ? currentRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
-        : otherRec && otherAlgorithmType === 'collaborative'
-        ? otherRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+      const collaborative = collaborativeRec
+        ? collaborativeRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
         : [];
 
-      const association = currentRec && currentAlgorithmType === 'association'
-        ? currentRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
-        : otherRec && otherAlgorithmType === 'association'
-        ? otherRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+      const association = associationRec
+        ? associationRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
         : [];
 
       // Skip if we don't have recommendations from at least one algorithm

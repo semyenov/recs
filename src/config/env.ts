@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
 
 // Load environment variables based on NODE_ENV
 const envFile = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
@@ -45,6 +46,10 @@ const envSchema = z.object({
   MIN_COMMON_USERS: z.coerce.number().int().positive().default(2),
   CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
   MIN_SUPPORT_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
+  
+  // Collaborative Filtering Optimization
+  ENABLE_PARALLEL_CF: z.coerce.boolean().default(false),
+  CF_PARALLEL_WORKERS: z.coerce.number().int().positive().optional(),
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
@@ -81,6 +86,8 @@ export const config = {
   isProduction: envResult.data.NODE_ENV === 'production',
   isTest: envResult.data.NODE_ENV === 'test',
   adminApiKeys: envResult.data.ADMIN_API_KEYS.split(',').map((k) => k.trim()),
+  // Collaborative Filtering parallel workers (default to CPU count - 1, min 1)
+  cfParallelWorkers: envResult.data.CF_PARALLEL_WORKERS ?? Math.max(1, os.cpus().length - 1),
 } as const;
 
 export type Config = typeof config;

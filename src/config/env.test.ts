@@ -57,6 +57,12 @@ describe('Environment Configuration', () => {
     expect(config.METRICS_PORT).toBeGreaterThan(0);
   });
 
+  it('should have collaborative filtering optimization configuration', () => {
+    expect(config.ENABLE_PARALLEL_CF).toBeDefined();
+    expect(typeof config.ENABLE_PARALLEL_CF).toBe('boolean');
+    expect(config.cfParallelWorkers).toBeGreaterThan(0);
+  });
+
   it('should have admin API keys', () => {
     expect(config.adminApiKeys).toBeDefined();
     expect(Array.isArray(config.adminApiKeys)).toBe(true);

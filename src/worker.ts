@@ -26,6 +26,10 @@ export async function startWorker(): Promise<void> {
       await batchExecutor.executeAssociationRulesJob(job);
     });
 
+    jobScheduler.registerWorker('compute-hybrid', async (job) => {
+      await batchExecutor.executeHybridJob(job);
+    });
+
     // Schedule recurring jobs
     await jobScheduler.scheduleRecurringJobs();
 

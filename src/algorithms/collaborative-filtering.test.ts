@@ -279,4 +279,137 @@ describe('CollaborativeFilter', () => {
       expect(recommendations[0].score).toBeCloseTo(0.7, 2);
     });
   });
+
+  describe('Performance Benchmarks', () => {
+    /**
+     * Generate test data for performance testing
+     */
+    function generateTestOrders(
+      numContragents: number,
+      numProducts: number,
+      ordersPerContragent: number,
+      productsPerOrder: number
+    ): Order[] {
+      const orders: Order[] = [];
+      let orderId = 1;
+
+      for (let c = 0; c < numContragents; c++) {
+        const contragentId = `U${String(c + 1).padStart(3, '0')}`;
+
+        for (let o = 0; o < ordersPerContragent; o++) {
+          const products: Record<string, { name: string; quantity: number; price: number; status: string }> = {};
+          const productIndices = new Set<number>();
+
+          // Generate unique products for this order
+          while (productIndices.size < productsPerOrder) {
+            const idx = Math.floor(Math.random() * numProducts);
+            productIndices.add(idx);
+          }
+
+          for (const idx of productIndices) {
+            const productId = `P${String(idx + 1).padStart(3, '0')}`;
+            products[productId] = {
+              name: `Product ${idx + 1}`,
+              quantity: 1,
+              price: 10 + idx,
+              status: 'Отгрузить',
+            };
+          }
+
+          const summary = Object.values(products).reduce((sum, p) => sum + p.price, 0);
+          orders.push({
+            _id: String(orderId++),
+            number: `O${String(orderId).padStart(3, '0')}`,
+            contragentId,
+            products,
+            summary,
+            date: new Date(),
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      return orders;
+    }
+
+    it('should handle medium-sized catalog efficiently (100 products)', () => {
+      const orders = generateTestOrders(50, 100, 5, 3);
+      const startTime = Date.now();
+
+      const similarities = cf.computeItemBasedSimilarity(orders);
+
+      const duration = Date.now() - startTime;
+
+      expect(similarities.size).toBeGreaterThan(0);
+      expect(duration).toBeLessThan(5000); // Should complete in under 5 seconds
+
+      // Verify we have top-N results per product
+      for (const [, similar] of similarities) {
+        expect(similar.length).toBeLessThanOrEqual(100); // PRE_COMPUTE_TOP_N default
+        if (similar.length > 0) {
+          // Verify sorted descending
+          for (let i = 1; i < similar.length; i++) {
+            expect(similar[i - 1].score).toBeGreaterThanOrEqual(similar[i].score);
+          }
+        }
+      }
+    });
+
+    it('should handle larger catalog efficiently (500 products)', () => {
+      const orders = generateTestOrders(200, 500, 3, 4);
+      const startTime = Date.now();
+
+      const similarities = cf.computeItemBasedSimilarity(orders);
+
+      const duration = Date.now() - startTime;
+
+      expect(similarities.size).toBeGreaterThan(0);
+      expect(duration).toBeLessThan(30000); // Should complete in under 30 seconds
+
+      // Verify memory efficiency - should only store top-N per product
+      let totalStored = 0;
+      for (const similar of similarities.values()) {
+        totalStored += similar.length;
+      }
+      const maxPossible = similarities.size * 100; // PRE_COMPUTE_TOP_N
+      expect(totalStored).toBeLessThanOrEqual(maxPossible);
+    });
+
+    it('should use early termination effectively', () => {
+      // Create orders where many products won't meet minCommonUsers threshold
+      const orders = generateTestOrders(10, 100, 2, 2);
+      const startTime = Date.now();
+
+      const similarities = cf.computeItemBasedSimilarity(orders);
+
+      const duration = Date.now() - startTime;
+
+      // With minCommonUsers=2 and sparse data, many comparisons should be skipped
+      expect(similarities.size).toBeGreaterThan(0);
+      expect(duration).toBeLessThan(10000); // Should be fast due to early termination
+    });
+
+    it('should maintain correctness with heap-based top-N', () => {
+      const orders = generateTestOrders(30, 50, 4, 3);
+
+      const similarities = cf.computeItemBasedSimilarity(orders);
+
+      // Verify each product has at most topN similarities
+      for (const [productId, similar] of similarities) {
+        expect(similar.length).toBeLessThanOrEqual(100); // PRE_COMPUTE_TOP_N
+
+        // Verify all scores are valid
+        for (const { productId: otherId, score } of similar) {
+          expect(score).toBeGreaterThanOrEqual(0);
+          expect(score).toBeLessThanOrEqual(1);
+          expect(otherId).not.toBe(productId); // No self-similarity
+        }
+
+        // Verify sorted descending
+        for (let i = 1; i < similar.length; i++) {
+          expect(similar[i - 1].score).toBeGreaterThanOrEqual(similar[i].score);
+        }
+      }
+    });
+  });
 });

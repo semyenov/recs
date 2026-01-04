@@ -74,6 +74,21 @@ export class JobScheduler {
       },
     });
 
+    // Hybrid recommendations: Daily at 3:30 AM (after association rules completes)
+    await this.scheduleJob({
+      name: 'compute-hybrid',
+      opts: {
+        repeat: {
+          pattern: '30 3 * * *',
+        },
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 60000,
+        },
+      },
+    });
+
     logger.info('✅ Recurring jobs scheduled');
   }
 
