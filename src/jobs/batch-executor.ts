@@ -7,6 +7,7 @@ import {
 } from '../storage/repositories';
 import { CollaborativeFilter } from '../algorithms/collaborative-filtering';
 import { AssociationRuleMiner } from '../algorithms/association-rules';
+import { RecommendationEngine } from '../engine/recommendation-engine';
 import { redisClient } from '../storage/redis';
 import { config } from '../config/env';
 import { logger } from '../config/logger';
@@ -18,11 +19,65 @@ export class BatchExecutor {
   private recommendationRepo = new RecommendationRepository();
   private collaborativeFilter = new CollaborativeFilter();
   private associationRuleMiner = new AssociationRuleMiner();
-  // private recommendationEngine = new RecommendationEngine(); // TODO: Use for hybrid blending
+  private recommendationEngine = new RecommendationEngine();
+
+  /**
+   * Gets or creates a shared version for batch jobs.
+   * 
+   * This ensures both collaborative and association jobs use the same version,
+   * enabling hybrid recommendation generation to work correctly.
+   * 
+   * The version is stored in Redis with a 1-hour TTL to prevent stale versions
+   * from being reused if jobs fail or are abandoned.
+   * 
+   * @returns Version string (e.g., "v1234567890")
+   */
+  private async getOrCreateSharedVersion(): Promise<string> {
+    const VERSION_KEY = 'rec:batch_version';
+    const VERSION_TTL = 3600; // 1 hour
+
+    try {
+      // Try to get existing version from Redis
+      const existingVersion = await redisClient.get<string>(VERSION_KEY);
+      
+      if (existingVersion) {
+        logger.info('Using existing shared version from Redis', { version: existingVersion });
+        return existingVersion;
+      }
+
+      // No existing version, create a new one
+      const newVersion = `v${Date.now()}`;
+      
+      try {
+        // Store in Redis with TTL
+        await redisClient.set(VERSION_KEY, newVersion, VERSION_TTL);
+        logger.info('Created new shared version and stored in Redis', {
+          version: newVersion,
+          ttl: VERSION_TTL,
+        });
+      } catch (redisError) {
+        // If Redis set fails, log warning but continue with local version
+        logger.warn('Failed to store version in Redis, using local version', {
+          version: newVersion,
+          error: redisError,
+        });
+      }
+
+      return newVersion;
+    } catch (error) {
+      // If Redis get fails, create new version locally
+      const fallbackVersion = `v${Date.now()}`;
+      logger.warn('Failed to get version from Redis, using fallback version', {
+        version: fallbackVersion,
+        error,
+      });
+      return fallbackVersion;
+    }
+  }
 
   async executeCollaborativeJob(_job: Job): Promise<void> {
     const batchId = uuidv4();
-    const version = `v${Date.now()}`;
+    const version = await this.getOrCreateSharedVersion();
     const startTime = Date.now();
 
     logger.info('Starting collaborative filtering batch job', { batchId, version });
@@ -78,6 +133,26 @@ export class BatchExecutor {
       await this.recommendationRepo.bulkUpsert(recommendations);
       logger.info('Recommendations saved successfully', { batchId });
 
+      // Step 3.5: Generate hybrid recommendations
+      logger.info('Generating hybrid recommendations', { batchId, version });
+      const hybridRecommendations = await this.generateHybridRecommendations(
+        'collaborative',
+        recommendations,
+        version,
+        batchId
+      );
+      if (hybridRecommendations.length > 0) {
+        logger.info('Saving hybrid recommendations', {
+          batchId,
+          version,
+          count: hybridRecommendations.length,
+        });
+        await this.recommendationRepo.bulkUpsert(hybridRecommendations);
+        logger.info('Hybrid recommendations saved successfully', { batchId });
+      } else {
+        logger.warn('No hybrid recommendations generated', { batchId, version });
+      }
+
       // Step 4: Quality validation and promotion
       // Quality checks ensure recommendations meet minimum standards before promotion:
       // - Average score: Ensures recommendations have meaningful similarity scores
@@ -111,7 +186,7 @@ export class BatchExecutor {
 
   async executeAssociationRulesJob(_job: Job): Promise<void> {
     const batchId = uuidv4();
-    const version = `v${Date.now()}`;
+    const version = await this.getOrCreateSharedVersion();
     const startTime = Date.now();
 
     logger.info('Starting association rules batch job', { batchId, version });
@@ -182,6 +257,26 @@ export class BatchExecutor {
       });
       await this.recommendationRepo.bulkUpsert(recommendations);
       logger.info('Recommendations saved successfully', { batchId });
+
+      // Step 3.5: Generate hybrid recommendations
+      logger.info('Generating hybrid recommendations', { batchId, version });
+      const hybridRecommendations = await this.generateHybridRecommendations(
+        'association',
+        recommendations,
+        version,
+        batchId
+      );
+      if (hybridRecommendations.length > 0) {
+        logger.info('Saving hybrid recommendations', {
+          batchId,
+          version,
+          count: hybridRecommendations.length,
+        });
+        await this.recommendationRepo.bulkUpsert(hybridRecommendations);
+        logger.info('Hybrid recommendations saved successfully', { batchId });
+      } else {
+        logger.warn('No hybrid recommendations generated', { batchId, version });
+      }
 
       // Step 4: Quality validation and promotion
       // Quality checks ensure recommendations meet minimum standards before promotion:
@@ -287,6 +382,157 @@ export class BatchExecutor {
     };
     logger.info('Quality validation completed', { metrics });
     return metrics;
+  }
+
+  /**
+   * Generates hybrid recommendations by blending collaborative and association recommendations.
+   * 
+   * This method loads recommendations from the other algorithm type for the same version,
+   * blends them per product using the RecommendationEngine, and returns hybrid recommendations.
+   * 
+   * Both algorithm types use the same version (ensured by getOrCreateSharedVersion()),
+   * which allows this method to find recommendations from the other algorithm type.
+   * 
+   * @param currentAlgorithmType - The algorithm type that was just processed
+   * @param currentRecommendations - The recommendations that were just generated
+   * @param version - The version string for this batch (shared between both algorithm types)
+   * @param batchId - The batch ID for logging
+   * @returns Array of hybrid recommendations, or empty array if blending is not possible
+   */
+  private async generateHybridRecommendations(
+    currentAlgorithmType: 'collaborative' | 'association',
+    currentRecommendations: Recommendation[],
+    version: string,
+    batchId: string
+  ): Promise<Recommendation[]> {
+    logger.info('Starting hybrid recommendation generation', {
+      batchId,
+      version,
+      currentAlgorithmType,
+      currentRecommendationCount: currentRecommendations.length,
+    });
+
+    // If current recommendations are empty, cannot generate hybrid
+    if (currentRecommendations.length === 0) {
+      logger.warn('Cannot generate hybrid recommendations: current recommendations are empty', {
+        batchId,
+        version,
+      });
+      return [];
+    }
+
+    // Determine the other algorithm type
+    const otherAlgorithmType =
+      currentAlgorithmType === 'collaborative' ? 'association' : 'collaborative';
+
+    // Load all recommendations for this version
+    logger.info('Loading recommendations for hybrid blending', {
+      batchId,
+      version,
+      otherAlgorithmType,
+    });
+    const allVersionRecs = await this.recommendationRepo.findByVersion(version);
+
+    // Filter to get the other algorithm's recommendations
+    const otherRecs = allVersionRecs.filter((rec) => rec.algorithmType === otherAlgorithmType);
+
+    if (otherRecs.length === 0) {
+      logger.warn(
+        `Cannot generate hybrid recommendations: no ${otherAlgorithmType} recommendations found for version`,
+        { batchId, version, otherAlgorithmType }
+      );
+      return [];
+    }
+
+    logger.info('Found recommendations from both algorithms', {
+      batchId,
+      version,
+      currentCount: currentRecommendations.length,
+      otherCount: otherRecs.length,
+    });
+
+    // Create a map of productId -> recommendations for quick lookup
+    const otherRecsMap = new Map<string, Recommendation>();
+    for (const rec of otherRecs) {
+      otherRecsMap.set(rec.productId, rec);
+    }
+
+    // Get all unique productIds that have recommendations in either algorithm
+    const allProductIds = new Set<string>();
+    for (const rec of currentRecommendations) {
+      allProductIds.add(rec.productId);
+    }
+    for (const rec of otherRecs) {
+      allProductIds.add(rec.productId);
+    }
+
+    // Compute context-aware weights (no user context in batch mode)
+    const weights = this.recommendationEngine.computeContextAwareWeights(
+      true, // We have collaborative data
+      true, // We have association data
+      false // No user purchase history in batch mode
+    );
+
+    logger.info('Computed blending weights', {
+      batchId,
+      version,
+      weights,
+    });
+
+    // Generate hybrid recommendations for each product
+    const hybridRecommendations: Recommendation[] = [];
+    const topN = config.PRE_COMPUTE_TOP_N;
+
+    for (const productId of allProductIds) {
+      const currentRec = currentRecommendations.find((r) => r.productId === productId);
+      const otherRec = otherRecsMap.get(productId);
+
+      // Convert to algorithm input format
+      const collaborative = currentRec && currentAlgorithmType === 'collaborative'
+        ? currentRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+        : otherRec && otherAlgorithmType === 'collaborative'
+        ? otherRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+        : [];
+
+      const association = currentRec && currentAlgorithmType === 'association'
+        ? currentRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+        : otherRec && otherAlgorithmType === 'association'
+        ? otherRec.recommendations.map((r) => ({ productId: r.productId, score: r.score }))
+        : [];
+
+      // Skip if we don't have recommendations from at least one algorithm
+      if (collaborative.length === 0 && association.length === 0) {
+        continue;
+      }
+
+      // Blend recommendations for this product
+      const blendedRecs = this.recommendationEngine.blendRecommendations(
+        collaborative,
+        association,
+        weights,
+        topN
+      );
+
+      if (blendedRecs.length > 0) {
+        hybridRecommendations.push({
+          productId,
+          algorithmType: 'hybrid',
+          recommendations: blendedRecs,
+          version,
+          batchId,
+          createdAt: new Date(),
+        });
+      }
+    }
+
+    logger.info('Generated hybrid recommendations', {
+      batchId,
+      version,
+      hybridCount: hybridRecommendations.length,
+      totalProducts: allProductIds.size,
+    });
+
+    return hybridRecommendations;
   }
 
   /**
