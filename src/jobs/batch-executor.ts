@@ -95,7 +95,7 @@ export class BatchExecutor {
         orderCount: orders.length,
         minCommonUsers: config.MIN_COMMON_USERS,
       });
-      const similarityMatrix = this.collaborativeFilter.computeItemBasedSimilarity(orders);
+      const similarityMatrix = await this.collaborativeFilter.computeItemBasedSimilarity(orders);
       logger.info(`Computed similarity matrix for ${similarityMatrix.size} products`, { batchId });
 
       // Step 3: Save recommendations

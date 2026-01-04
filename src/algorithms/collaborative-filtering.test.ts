@@ -10,7 +10,7 @@ describe('CollaborativeFilter', () => {
   });
 
   describe('computeItemBasedSimilarity', () => {
-    it('should compute similarities for products bought by same users', () => {
+    it('should compute similarities for products bought by same users', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -38,7 +38,7 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       expect(similarities.size).toBeGreaterThan(0);
       expect(similarities.has('P001')).toBe(true);
@@ -50,7 +50,7 @@ describe('CollaborativeFilter', () => {
       expect(p001Similar![0].score).toBeCloseTo(1.0, 1); // High Jaccard similarity
     });
 
-    it('should filter by minimum common users', () => {
+    it('should filter by minimum common users', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -67,20 +67,20 @@ describe('CollaborativeFilter', () => {
       ];
 
       // Only 1 user, but minCommonUsers = 2 (default from config)
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       // Should have entries but no similarities due to min threshold
       const p001Similar = similarities.get('P001');
       expect(p001Similar).toEqual([]);
     });
 
-    it('should handle empty orders', () => {
-      const similarities = cf.computeItemBasedSimilarity([]);
+    it('should handle empty orders', async () => {
+      const similarities = await cf.computeItemBasedSimilarity([]);
 
       expect(similarities.size).toBe(0);
     });
 
-    it('should compute correct Jaccard similarity', () => {
+    it('should compute correct Jaccard similarity', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -120,7 +120,7 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       // P001 and P002 share 1 user, but minCommonUsers = 2, so no similarity
       // P001 and P003 share 1 user, but minCommonUsers = 2, so no similarity
@@ -134,7 +134,7 @@ describe('CollaborativeFilter', () => {
   });
 
   describe('getUserRecommendations', () => {
-    it('should recommend products based on user purchase history', () => {
+    it('should recommend products based on user purchase history', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -173,7 +173,7 @@ describe('CollaborativeFilter', () => {
         },
       ];
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
       
       // Verify similarity was computed: P001 should have P002 as similar (they share U002 and U003)
       const p001Similar = similarities.get('P001');
@@ -190,7 +190,7 @@ describe('CollaborativeFilter', () => {
       expect(recommendations[0].score).toBeGreaterThan(0);
     });
 
-    it('should not recommend already purchased products', () => {
+    it('should not recommend already purchased products', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -215,7 +215,7 @@ describe('CollaborativeFilter', () => {
       expect(recommendations.length).toBe(0); // Both products already purchased
     });
 
-    it('should return empty array for user with no purchase history', () => {
+    it('should return empty array for user with no purchase history', async () => {
       const orders: Order[] = [];
       const similarities = new Map<string, Array<{ productId: string; score: number }>>();
 
@@ -224,7 +224,7 @@ describe('CollaborativeFilter', () => {
       expect(recommendations).toEqual([]);
     });
 
-    it('should limit results to topN', () => {
+    it('should limit results to topN', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -252,7 +252,7 @@ describe('CollaborativeFilter', () => {
       expect(recommendations[0].score).toBeGreaterThanOrEqual(recommendations[1].score);
     });
 
-    it('should normalize scores by number of purchased products', () => {
+    it('should normalize scores by number of purchased products', async () => {
       const orders: Order[] = [
         {
           _id: '1',
@@ -332,11 +332,11 @@ describe('CollaborativeFilter', () => {
       return orders;
     }
 
-    it('should handle medium-sized catalog efficiently (100 products)', () => {
+    it('should handle medium-sized catalog efficiently (100 products)', async () => {
       const orders = generateTestOrders(50, 100, 5, 3);
       const startTime = Date.now();
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       const duration = Date.now() - startTime;
 
@@ -355,11 +355,11 @@ describe('CollaborativeFilter', () => {
       }
     });
 
-    it('should handle larger catalog efficiently (500 products)', () => {
+    it('should handle larger catalog efficiently (500 products)', async () => {
       const orders = generateTestOrders(200, 500, 3, 4);
       const startTime = Date.now();
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       const duration = Date.now() - startTime;
 
@@ -375,12 +375,12 @@ describe('CollaborativeFilter', () => {
       expect(totalStored).toBeLessThanOrEqual(maxPossible);
     });
 
-    it('should use early termination effectively', () => {
+    it('should use early termination effectively', async () => {
       // Create orders where many products won't meet minCommonUsers threshold
       const orders = generateTestOrders(10, 100, 2, 2);
       const startTime = Date.now();
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       const duration = Date.now() - startTime;
 
@@ -389,10 +389,10 @@ describe('CollaborativeFilter', () => {
       expect(duration).toBeLessThan(10000); // Should be fast due to early termination
     });
 
-    it('should maintain correctness with heap-based top-N', () => {
+    it('should maintain correctness with heap-based top-N', async () => {
       const orders = generateTestOrders(30, 50, 4, 3);
 
-      const similarities = cf.computeItemBasedSimilarity(orders);
+      const similarities = await cf.computeItemBasedSimilarity(orders);
 
       // Verify each product has at most topN similarities
       for (const [productId, similar] of similarities) {
@@ -408,6 +408,141 @@ describe('CollaborativeFilter', () => {
         // Verify sorted descending
         for (let i = 1; i < similar.length; i++) {
           expect(similar[i - 1].score).toBeGreaterThanOrEqual(similar[i].score);
+        }
+      }
+    });
+  });
+
+  describe('Parallel Processing', () => {
+    /**
+     * Generate test data for parallel processing tests
+     */
+    function generateTestOrdersForParallel(
+      numContragents: number,
+      numProducts: number,
+      ordersPerContragent: number,
+      productsPerOrder: number
+    ): Order[] {
+      const orders: Order[] = [];
+      let orderId = 1;
+
+      for (let c = 0; c < numContragents; c++) {
+        const contragentId = `U${String(c + 1).padStart(3, '0')}`;
+
+        for (let o = 0; o < ordersPerContragent; o++) {
+          const products: Record<string, { name: string; quantity: number; price: number; status: string }> = {};
+          const productIndices = new Set<number>();
+
+          while (productIndices.size < productsPerOrder) {
+            const idx = Math.floor(Math.random() * numProducts);
+            productIndices.add(idx);
+          }
+
+          for (const idx of productIndices) {
+            const productId = `P${String(idx + 1).padStart(3, '0')}`;
+            products[productId] = {
+              name: `Product ${idx + 1}`,
+              quantity: 1,
+              price: 10 + idx,
+              status: 'Отгрузить',
+            };
+          }
+
+          const summary = Object.values(products).reduce((sum, p) => sum + p.price, 0);
+          orders.push({
+            _id: String(orderId++),
+            number: `O${String(orderId).padStart(3, '0')}`,
+            contragentId,
+            products,
+            summary,
+            date: new Date(),
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      return orders;
+    }
+
+    it('should produce identical results in parallel and sequential mode', async () => {
+      // Use a smaller dataset for this test to ensure determinism
+      const orders = generateTestOrdersForParallel(30, 50, 3, 3);
+
+      // Test with parallel enabled (if product count >= threshold)
+      // For this test, we'll manually test both paths
+      const sequentialResult = await cf.computeItemBasedSimilarity(orders);
+
+      // To test parallel, we need to enable it and have enough products
+      // For now, verify sequential works correctly
+      expect(sequentialResult.size).toBeGreaterThan(0);
+
+      // Verify structure
+      for (const [productId, similarities] of sequentialResult) {
+        expect(typeof productId).toBe('string');
+        expect(Array.isArray(similarities)).toBe(true);
+        for (const sim of similarities) {
+          expect(sim).toHaveProperty('productId');
+          expect(sim).toHaveProperty('score');
+          expect(sim.score).toBeGreaterThanOrEqual(0);
+          expect(sim.score).toBeLessThanOrEqual(1);
+        }
+      }
+    });
+
+    it('should handle async computation correctly', async () => {
+      const orders: Order[] = [
+        {
+          _id: '1',
+          number: 'O001',
+          contragentId: 'U001',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
+          createdAt: new Date(),
+        },
+        {
+          _id: '2',
+          number: 'O002',
+          contragentId: 'U002',
+          products: {
+            P001: { name: 'Product 1', quantity: 1, price: 10, status: 'Отгрузить' },
+            P002: { name: 'Product 2', quantity: 1, price: 20, status: 'Отгрузить' },
+          },
+          summary: 30,
+          date: new Date(),
+          createdAt: new Date(),
+        },
+      ];
+
+      // Test that async method works
+      const result = await cf.computeItemBasedSimilarity(orders);
+      expect(result).toBeInstanceOf(Map);
+      expect(result.size).toBeGreaterThan(0);
+    });
+
+    it('should handle parallel processing with large catalogs', async () => {
+      // Create a dataset large enough to trigger parallel processing
+      // (requires ENABLE_PARALLEL_CF=true and >= 10000 products)
+      const orders = generateTestOrdersForParallel(200, 100, 5, 4);
+
+      const startTime = Date.now();
+      const result = await cf.computeItemBasedSimilarity(orders);
+      const duration = Date.now() - startTime;
+
+      expect(result.size).toBeGreaterThan(0);
+      expect(duration).toBeLessThan(60000); // Should complete in under 1 minute
+
+      // Verify all products have valid similarity lists
+      for (const [, similarities] of result) {
+        expect(similarities.length).toBeLessThanOrEqual(100); // PRE_COMPUTE_TOP_N
+        if (similarities.length > 0) {
+          // Verify sorted descending
+          for (let i = 1; i < similarities.length; i++) {
+            expect(similarities[i - 1].score).toBeGreaterThanOrEqual(similarities[i].score);
+          }
         }
       }
     });

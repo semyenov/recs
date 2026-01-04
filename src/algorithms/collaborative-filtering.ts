@@ -1,54 +1,43 @@
 import { Order } from '../types';
 import { logger } from '../config/logger';
 import { config } from '../config/env';
+import Piscina from 'piscina';
+import { resolve } from 'path';
+import type { WorkerChunk, WorkerResult } from './collaborative-filtering-worker';
+import { Heap } from 'heap-js';
 
 /**
- * Min-heap for maintaining top-N items efficiently
+ * Wrapper around heap-js Heap for maintaining top-N items efficiently
+ * Uses a min-heap to keep only the top N highest-scoring items
  */
-class MinHeap<T extends { score: number }> {
-  private heap: T[] = [];
+class TopNHeap<T extends { score: number }> {
+  private heap: Heap<T>;
 
-  constructor(private maxSize: number) {}
+  constructor(private maxSize: number) {
+    // TopNHeap with comparator: smaller score = higher priority (we want to keep largest scores)
+    this.heap = new Heap<T>((a, b) => a.score - b.score);
+  }
 
   push(item: T): void {
     if (this.heap.length < this.maxSize) {
       this.heap.push(item);
-      this.bubbleUp(this.heap.length - 1);
-    } else if (item.score > this.heap[0].score) {
-      this.heap[0] = item;
-      this.bubbleDown(0);
-    }
-  }
-
-  private bubbleUp(index: number): void {
-    while (index > 0) {
-      const parent = Math.floor((index - 1) / 2);
-      if (this.heap[parent].score <= this.heap[index].score) break;
-      [this.heap[parent], this.heap[index]] = [this.heap[index], this.heap[parent]];
-      index = parent;
-    }
-  }
-
-  private bubbleDown(index: number): void {
-    while (true) {
-      let smallest = index;
-      const left = 2 * index + 1;
-      const right = 2 * index + 2;
-
-      if (left < this.heap.length && this.heap[left].score < this.heap[smallest].score) {
-        smallest = left;
+    } else {
+      // If heap is full, check if new item is better than the worst (root/min)
+      const root = this.heap.peek();
+      if (root && item.score > root.score) {
+        this.heap.replace(item); // Replace root with new larger item
       }
-      if (right < this.heap.length && this.heap[right].score < this.heap[smallest].score) {
-        smallest = right;
-      }
-      if (smallest === index) break;
-      [this.heap[index], this.heap[smallest]] = [this.heap[smallest], this.heap[index]];
-      index = smallest;
     }
   }
 
   toSortedArray(): T[] {
-    return [...this.heap].sort((a, b) => b.score - a.score);
+    // Extract all items and sort descending by score
+    const items: T[] = [];
+    while (this.heap.length > 0) {
+      items.push(this.heap.pop()!);
+    }
+    // Sort descending (largest scores first)
+    return items.sort((a, b) => b.score - a.score);
   }
 }
 
@@ -96,9 +85,9 @@ export class CollaborativeFilter {
    * - Heap-based top-N collection
    * - Optional parallelization for large catalogs
    */
-  computeItemBasedSimilarity(
+  async computeItemBasedSimilarity(
     orders: Order[]
-  ): Map<string, Array<{ productId: string; score: number }>> {
+  ): Promise<Map<string, Array<{ productId: string; score: number }>>> {
     const minCommonUsers = config.MIN_COMMON_USERS;
     const topN = config.PRE_COMPUTE_TOP_N;
     const enableParallel = config.ENABLE_PARALLEL_CF;
@@ -136,7 +125,7 @@ export class CollaborativeFilter {
       logger.info(
         `[CollaborativeFilter] Using parallel processing with ${config.cfParallelWorkers} workers`
       );
-      return this.computeItemBasedSimilarityParallel(allProducts, productContragents, minCommonUsers, topN);
+      return await this.computeItemBasedSimilarityParallel(allProducts, productContragents, minCommonUsers, topN);
     }
 
     return this.computeItemBasedSimilaritySequential(allProducts, productContragents, minCommonUsers, topN);
@@ -163,11 +152,11 @@ export class CollaborativeFilter {
       productData.set(productId, { sorted: contragents, size: contragents.length });
     }
 
-    const similarityMatrix = new Map<string, MinHeap<{ productId: string; score: number }>>();
+    const similarityMatrix = new Map<string, TopNHeap<{ productId: string; score: number }>>();
     
     // Initialize heaps for all products
     for (const productId of allProducts) {
-      similarityMatrix.set(productId, new MinHeap<{ productId: string; score: number }>(topN));
+      similarityMatrix.set(productId, new TopNHeap<{ productId: string; score: number }>(topN));
     }
 
     let processed = 0;
@@ -250,20 +239,133 @@ export class CollaborativeFilter {
   }
 
   /**
-   * Parallel computation using worker threads
+   * Parallel computation using Piscina worker threads
    */
-  private computeItemBasedSimilarityParallel(
+  private async computeItemBasedSimilarityParallel(
     allProducts: string[],
     productContragents: Map<string, Set<string>>,
     minCommonUsers: number,
     topN: number
-  ): Map<string, Array<{ productId: string; score: number }>> {
-    // For now, fall back to sequential with a note about future implementation
-    // Full parallel implementation would require worker thread setup
-    logger.warn(
-      '[CollaborativeFilter] Parallel processing requested but not fully implemented yet, using optimized sequential'
+  ): Promise<Map<string, Array<{ productId: string; score: number }>>> {
+    logger.info(
+      '[CollaborativeFilter] Step 2: Computing item-item similarity using parallel workers'
     );
-    return this.computeItemBasedSimilaritySequential(allProducts, productContragents, minCommonUsers, topN);
+
+    // Pre-compute sorted arrays and sizes for efficiency (same as sequential)
+    const productData: Record<string, { sorted: string[]; size: number }> = {};
+    for (const productId of allProducts) {
+      const contragents = Array.from(productContragents.get(productId)!);
+      contragents.sort(); // Sort for merge-join
+      productData[productId] = { sorted: contragents, size: contragents.length };
+    }
+
+    // Create Piscina worker pool
+    // Use .ts file in development, .js in production (compiled)
+    const workerPath = resolve(__dirname, 'collaborative-filtering-worker.ts');
+    const pool = new Piscina({
+      filename: workerPath,
+      maxThreads: config.cfParallelWorkers,
+    });
+
+    // Chunk products across workers
+    const numWorkers = config.cfParallelWorkers;
+    const chunkSize = Math.ceil(allProducts.length / numWorkers);
+    const chunks: WorkerChunk[] = [];
+
+    for (let i = 0; i < numWorkers; i++) {
+      const startIndex = i * chunkSize;
+      const endIndex = Math.min(startIndex + chunkSize, allProducts.length);
+      
+      if (startIndex >= allProducts.length) break;
+
+      const chunkProductIds = allProducts.slice(startIndex, endIndex);
+      chunks.push({
+        productIds: chunkProductIds,
+        productData,
+        allProductIds: allProducts,
+        minCommonUsers,
+        topN,
+        startIndex,
+        endIndex,
+      });
+    }
+
+    logger.info(
+      `[CollaborativeFilter] Split ${allProducts.length} products into ${chunks.length} chunks for ${numWorkers} workers`
+    );
+
+    // Process chunks in parallel
+    const startTime = Date.now();
+    let workerResults: WorkerResult[][];
+
+    try {
+      workerResults = await Promise.all(
+        chunks.map((chunk) => pool.run(chunk))
+      );
+    } catch (error) {
+      logger.error(
+        '[CollaborativeFilter] Error in parallel processing, falling back to sequential',
+        { error }
+      );
+      // Fallback to sequential on error
+      return this.computeItemBasedSimilaritySequential(
+        allProducts,
+        productContragents,
+        minCommonUsers,
+        topN
+      );
+    } finally {
+      // Clean up worker pool
+      await pool.destroy();
+    }
+
+    const parallelDuration = Date.now() - startTime;
+    logger.info(
+      `[CollaborativeFilter] Parallel computation completed in ${parallelDuration}ms`
+    );
+
+    // Merge results from all workers
+    // Each worker returns similarities for its chunk of products
+    // We need to merge these and also add reverse similarities (symmetry)
+    const similarityMatrix = new Map<string, TopNHeap<{ productId: string; score: number }>>();
+    
+    // Initialize heaps for all products
+    for (const productId of allProducts) {
+      similarityMatrix.set(productId, new TopNHeap<{ productId: string; score: number }>(topN));
+    }
+
+    // Process results from all workers
+    for (const workerResult of workerResults) {
+      for (const { productId, similarities } of workerResult) {
+        const heap = similarityMatrix.get(productId)!;
+        
+        // Add all similarities from this worker
+        for (const { productId: otherId, score } of similarities) {
+          heap.push({ productId: otherId, score });
+          
+          // Add reverse similarity (symmetry)
+          const otherHeap = similarityMatrix.get(otherId)!;
+          otherHeap.push({ productId, score });
+        }
+      }
+    }
+
+    // Convert heaps to sorted arrays
+    const result = new Map<string, Array<{ productId: string; score: number }>>();
+    for (const [productId, heap] of similarityMatrix) {
+      result.set(productId, heap.toSortedArray());
+    }
+
+    const totalSimilarities = Array.from(result.values()).reduce(
+      (sum, sims) => sum + sims.length,
+      0
+    );
+
+    logger.info(
+      `[CollaborativeFilter] Merged parallel results: ${allProducts.length} products, ${totalSimilarities} total similarities`
+    );
+
+    return result;
   }
 
   /**

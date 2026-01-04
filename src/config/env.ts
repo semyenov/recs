@@ -49,7 +49,7 @@ const envSchema = z.object({
   
   // Collaborative Filtering Optimization
   ENABLE_PARALLEL_CF: z.coerce.boolean().default(false),
-  CF_PARALLEL_WORKERS: z.coerce.number().int().positive().optional(),
+  CF_PARALLEL_WORKERS: z.coerce.number().int().positive().max(32).optional(), // Max 32 workers
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
@@ -86,8 +86,11 @@ export const config = {
   isProduction: envResult.data.NODE_ENV === 'production',
   isTest: envResult.data.NODE_ENV === 'test',
   adminApiKeys: envResult.data.ADMIN_API_KEYS.split(',').map((k) => k.trim()),
-  // Collaborative Filtering parallel workers (default to CPU count - 1, min 1)
-  cfParallelWorkers: envResult.data.CF_PARALLEL_WORKERS ?? Math.max(1, os.cpus().length - 1),
+  // Collaborative Filtering parallel workers (default to CPU count - 1, min 1, max 32)
+  cfParallelWorkers: Math.min(
+    32,
+    Math.max(1, envResult.data.CF_PARALLEL_WORKERS ?? Math.max(1, os.cpus().length - 1))
+  ),
 } as const;
 
 export type Config = typeof config;
