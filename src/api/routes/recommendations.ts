@@ -1,12 +1,60 @@
 import { Router } from 'express';
-import { RecommendationRepository } from '../../storage/repositories';
+import { RecommendationRepository, OrderRepository } from '../../storage/repositories';
 import { redisClient } from '../../storage/redis';
 import { recommendationQuerySchema } from '../../types/validation';
 import { logger } from '../../config/logger';
-import { RecommendationResponse } from '../../types';
+import { RecommendationResponse, Recommendation } from '../../types';
+import { CollaborativeFilter } from '../../algorithms/collaborative-filtering';
+import { RecommendationEngine } from '../../engine/recommendation-engine';
 
 const router = Router();
 const recommendationRepo = new RecommendationRepository();
+const orderRepo = new OrderRepository();
+const collaborativeFilter = new CollaborativeFilter();
+const recommendationEngine = new RecommendationEngine();
+
+/**
+ * Helper: Load collaborative similarity matrix from pre-computed recommendations
+ */
+async function loadCollaborativeSimilarityMatrix(
+  version: string
+): Promise<Map<string, Array<{ _id: string; score: number }>>> {
+  const cacheKey = `collab_similarity:${version}`;
+  let matrix = await redisClient.get<Map<string, Array<{ _id: string; score: number }>>>(cacheKey);
+
+  if (!matrix) {
+    // Load from MongoDB and build matrix
+    const recommendations = await recommendationRepo.findByVersion(version);
+    matrix = new Map();
+
+    for (const rec of recommendations) {
+      if (rec.algorithmType === 'collaborative') {
+        const similar = rec.recommendations.map((r) => ({
+          _id: r._id,
+          score: r.score,
+        }));
+        matrix.set(rec.productId, similar);
+      }
+    }
+
+    // Cache for 4 hours
+    await redisClient.set(cacheKey, matrix, 14400);
+  }
+
+  return matrix;
+}
+
+/**
+ * Helper: Convert stored recommendations to algorithm input format
+ */
+function convertRecommendationsToAlgorithmFormat(
+  recommendations: Array<{ _id: string; score: number }>
+): Array<{ _id: string; score: number }> {
+  return recommendations.map((r) => ({
+    _id: r._id,
+    score: r.score,
+  }));
+}
 
 /**
  * GET /v1/products/:productId/similar
@@ -119,28 +167,103 @@ router.get('/products/:productId/frequently-bought-with', async (req, res, next)
 });
 
 /**
- * GET /v1/users/:userId/recommended
- * Get personalized recommendations for a user
+ * GET /v1/contragents/:contragentId/recommended
+ * Get personalized recommendations for a contragent
  */
-router.get('/users/:userId/recommended', async (req, res, next) => {
+router.get('/contragents/:contragentId/recommended', async (req, res, next) => {
   try {
-    const { userId } = req.params;
+    const { contragentId } = req.params;
     const query = recommendationQuerySchema.parse(req.query);
+    const startTime = Date.now();
 
-    // TODO: Implement user-based collaborative filtering
-    // For now, return a placeholder
-    logger.warn('User-based recommendations not yet implemented', { userId });
+    // Get current version
+    const currentVersion = await redisClient.get<string>('rec:current_version');
+    if (!currentVersion) {
+      res.status(503).json({ error: 'Recommendations not available yet' });
+      return;
+    }
 
-    res.json({
-      userId,
-      recommendations: [],
-      pagination: {
-        limit: query.limit,
-        offset: query.offset,
-        total: 0,
-        hasMore: false,
-      },
-    });
+    // Try cache first
+    const cacheKey = `contragent_recs:${contragentId}:${currentVersion}`;
+    let cachedResponse = await redisClient.get<RecommendationResponse & { contragentId: string }>(
+      cacheKey
+    );
+    let cacheHit = true;
+
+    if (!cachedResponse) {
+      cacheHit = false;
+
+      // Load contragent's order history
+      const contragentOrders = await orderRepo.findByContragentId(contragentId);
+      const hasPurchaseHistory = contragentOrders.length > 0;
+
+      let recommendations: Array<{ _id: string; score: number }> = [];
+
+      if (hasPurchaseHistory) {
+        // Use collaborative filtering
+        try {
+          const similarityMatrix = await loadCollaborativeSimilarityMatrix(currentVersion);
+          const topN = query.limit + query.offset + 50; // Get extra for pagination
+          recommendations = collaborativeFilter.getUserRecommendations(
+            contragentId,
+            contragentOrders,
+            similarityMatrix,
+            topN
+          );
+        } catch (error) {
+          logger.warn(
+            'Failed to get collaborative recommendations, falling back to content-based',
+            {
+              contragentId,
+              error,
+            }
+          );
+          // Fall through to content-based fallback
+        }
+      }
+
+      // Cold start: fallback to content-based recommendations
+      if (recommendations.length === 0) {
+        // Get popular content-based recommendations (simplified: get from any product)
+        const contentBasedRecs = await recommendationRepo.findByVersion(currentVersion, 1);
+        if (contentBasedRecs.length > 0 && contentBasedRecs[0].algorithmType === 'content-based') {
+          // Use top recommendations from first product as fallback
+          recommendations = convertRecommendationsToAlgorithmFormat(
+            contentBasedRecs[0].recommendations.slice(0, query.limit + query.offset + 50)
+          );
+        }
+      }
+
+      // Apply pagination
+      const paginatedRecs = recommendations.slice(query.offset, query.offset + query.limit);
+
+      const response: RecommendationResponse & { contragentId: string } = {
+        contragentId,
+        productId: contragentId, // Use contragentId as productId for compatibility
+        recommendations: paginatedRecs.map((r, idx) => ({
+          productId: r._id,
+          score: r.score,
+          rank: query.offset + idx + 1,
+        })),
+        pagination: {
+          limit: query.limit,
+          offset: query.offset,
+          total: recommendations.length,
+          hasMore: query.offset + query.limit < recommendations.length,
+        },
+        metadata: {
+          version: currentVersion,
+          cacheHit,
+          computeTime: Date.now() - startTime,
+        },
+      };
+
+      // Cache for 2 hours
+      await redisClient.set(cacheKey, response, 7200);
+      cachedResponse = response;
+    }
+
+    res.json(cachedResponse);
   } catch (error) {
     next(error);
   }
@@ -154,42 +277,107 @@ router.get('/products/:productId/recommendations', async (req, res, next) => {
   try {
     const { productId } = req.params;
     const query = recommendationQuerySchema.parse(req.query);
+    const startTime = Date.now();
 
-    // TODO: Implement hybrid blending
-    // For now, fallback to content-based
-    logger.warn('Hybrid recommendations not yet fully implemented', { productId });
-
+    // Get current version
     const currentVersion = await redisClient.get<string>('rec:current_version');
     if (!currentVersion) {
       res.status(503).json({ error: 'Recommendations not available yet' });
       return;
     }
 
-    const dbRec = await recommendationRepo.findByProductId(productId, currentVersion);
+    // Try cache first
+    const contragentId = (req.query.contragentId as string) || undefined;
+    const cacheKey = contragentId
+      ? `hybrid_recs:${productId}:${contragentId}:${currentVersion}`
+      : `hybrid_recs:${productId}:${currentVersion}`;
+    let cachedResponse = await redisClient.get<RecommendationResponse>(cacheKey);
+    let cacheHit = true;
 
-    if (!dbRec) {
-      res.status(404).json({ error: 'Recommendations not available' });
-      return;
-    }
+    if (!cachedResponse) {
+      cacheHit = false;
 
-    const response: RecommendationResponse = {
-      productId,
-      recommendations: dbRec.recommendations
-        .slice(query.offset, query.offset + query.limit)
-        .map((r, idx) => ({
+      // Load recommendations from all three algorithms
+      // Query MongoDB directly to get recommendations by algorithm type
+      const { mongoClient } = await import('../../storage/mongo');
+      const db = mongoClient.getDb();
+      const [contentBasedRec, collaborativeRec, associationRec] = await Promise.all([
+        db
+          .collection<Recommendation>('recommendations')
+          .findOne({ productId, version: currentVersion, algorithmType: 'content-based' }),
+        db
+          .collection<Recommendation>('recommendations')
+          .findOne({ productId, version: currentVersion, algorithmType: 'collaborative' }),
+        db
+          .collection<Recommendation>('recommendations')
+          .findOne({ productId, version: currentVersion, algorithmType: 'association' }),
+      ]);
+
+      // Check if contragent has purchase history (for context-aware weights)
+      let contragentHasPurchaseHistory = false;
+      if (contragentId) {
+        const contragentOrders = await orderRepo.findByContragentId(contragentId);
+        contragentHasPurchaseHistory = contragentOrders.length > 0;
+      }
+
+      // Convert to algorithm input format
+      const contentBased = contentBasedRec
+        ? convertRecommendationsToAlgorithmFormat(contentBasedRec.recommendations || [])
+        : [];
+      const collaborative = collaborativeRec
+        ? convertRecommendationsToAlgorithmFormat(collaborativeRec.recommendations || [])
+        : [];
+      const association = associationRec
+        ? convertRecommendationsToAlgorithmFormat(associationRec.recommendations || [])
+        : [];
+
+      // Compute context-aware weights
+      const weights = recommendationEngine.computeContextAwareWeights(
+        contentBased.length > 0,
+        collaborative.length > 0,
+        association.length > 0,
+        contragentHasPurchaseHistory
+      );
+
+      // Blend recommendations
+      const topN = query.limit + query.offset + 50; // Get extra for pagination
+      const blendedRecs = recommendationEngine.blendRecommendations(
+        contentBased,
+        collaborative,
+        association,
+        weights,
+        topN
+      );
+
+      // Apply pagination
+      const paginatedRecs = blendedRecs.slice(query.offset, query.offset + query.limit);
+
+      const response: RecommendationResponse = {
+        productId,
+        recommendations: paginatedRecs.map((r, idx) => ({
           productId: r._id,
           score: r.score,
           rank: query.offset + idx + 1,
         })),
-      pagination: {
-        limit: query.limit,
-        offset: query.offset,
-        total: dbRec.recommendations.length,
-        hasMore: query.offset + query.limit < dbRec.recommendations.length,
-      },
-    };
+        pagination: {
+          limit: query.limit,
+          offset: query.offset,
+          total: blendedRecs.length,
+          hasMore: query.offset + query.limit < blendedRecs.length,
+        },
+        metadata: {
+          version: currentVersion,
+          cacheHit,
+          computeTime: Date.now() - startTime,
+        },
+      };
 
-    res.json(response);
+      // Cache for 4 hours
+      await redisClient.set(cacheKey, response, 14400);
+      cachedResponse = response;
+    }
+
+    res.json(cachedResponse);
   } catch (error) {
     next(error);
   }

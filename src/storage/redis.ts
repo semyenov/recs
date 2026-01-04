@@ -1,19 +1,22 @@
-import { createClient, RedisClientType } from 'redis';
+import Redis from 'ioredis';
 import { config } from '../config/env';
 import { logger } from '../config/logger';
 
 export class RedisClient {
-  private client: RedisClientType | null = null;
+  private client: Redis | null = null;
 
   async connect(): Promise<void> {
     try {
-      this.client = createClient({
-        socket: {
-          host: config.REDIS_HOST,
-          port: config.REDIS_PORT,
-        },
+      this.client = new Redis({
+        host: config.REDIS_HOST,
+        port: config.REDIS_PORT,
         password: config.REDIS_PASSWORD || undefined,
-        database: config.REDIS_DB,
+        db: config.REDIS_DB,
+        retryStrategy: (times: number): number => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        maxRetriesPerRequest: 3,
       });
 
       this.client.on('error', (error: Error) => {
@@ -28,7 +31,31 @@ export class RedisClient {
         logger.info('✅ Redis connected successfully');
       });
 
-      await this.client.connect();
+      // ioredis connects automatically, but we wait for ready state
+      await new Promise<void>((resolve, reject) => {
+        if (!this.client) {
+          reject(new Error('Redis client not initialized'));
+          return;
+        }
+
+        if (this.client.status === 'ready') {
+          resolve();
+          return;
+        }
+
+        const readyHandler = (): void => {
+          this.client?.removeListener('error', errorHandler);
+          resolve();
+        };
+
+        const errorHandler = (error: Error): void => {
+          this.client?.removeListener('ready', readyHandler);
+          reject(error);
+        };
+
+        this.client.once('ready', readyHandler);
+        this.client.once('error', errorHandler);
+      });
 
       // Configure Redis memory settings
       await this.configureMemory();
@@ -45,7 +72,7 @@ export class RedisClient {
     }
   }
 
-  getClient(): RedisClientType {
+  getClient(): Redis {
     if (!this.client) {
       throw new Error('Redis not connected. Call connect() first.');
     }
@@ -57,10 +84,10 @@ export class RedisClient {
 
     try {
       // Set max memory
-      await this.client.configSet('maxmemory', config.REDIS_MAX_MEMORY);
+      await this.client.config('SET', 'maxmemory', config.REDIS_MAX_MEMORY);
 
       // Set eviction policy
-      await this.client.configSet('maxmemory-policy', config.REDIS_EVICTION_POLICY);
+      await this.client.config('SET', 'maxmemory-policy', config.REDIS_EVICTION_POLICY);
 
       logger.info('✅ Redis memory configuration applied', {
         maxMemory: config.REDIS_MAX_MEMORY,
@@ -82,7 +109,7 @@ export class RedisClient {
     const client = this.getClient();
     const serialized = JSON.stringify(value);
     if (ttlSeconds) {
-      await client.setEx(key, ttlSeconds, serialized);
+      await client.setex(key, ttlSeconds, serialized);
     } else {
       await client.set(key, serialized);
     }
@@ -105,7 +132,7 @@ export class RedisClient {
   }
 
   isConnected(): boolean {
-    return this.client !== null && this.client.isReady;
+    return this.client !== null && this.client.status === 'ready';
   }
 }
 
