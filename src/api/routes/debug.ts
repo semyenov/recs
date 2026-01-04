@@ -4,6 +4,7 @@ import { debugRateLimiter } from '../middleware/rate-limiter';
 import { RecommendationRepository } from '../../storage/repositories';
 import { redisClient } from '../../storage/redis';
 import { DebugRecommendationResponse } from '../../types';
+import { jobScheduler } from '../../jobs/scheduler';
 
 const router = Router();
 const recommendationRepo = new RecommendationRepository();
@@ -78,6 +79,69 @@ router.post('/rollback', requireAdmin, async (_req, res, next) => {
       message: 'Rollback successful',
       from: currentVersion,
       to: previousVersion,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /debug/v1/trigger-batch/:jobType
+ * Force start a batch job immediately (admin only)
+ *
+ * Job types:
+ * - content-based: Computes product similarity based on attributes
+ * - collaborative: Computes item-based similarities from user orders
+ * - association-rules: Mines frequently bought together patterns
+ */
+router.post('/trigger-batch/:jobType', requireAdmin, debugRateLimiter, async (req, res, next) => {
+  try {
+    const { jobType } = req.params;
+
+    const validJobTypes = ['content-based', 'collaborative', 'association-rules'];
+    if (!validJobTypes.includes(jobType)) {
+      res.status(400).json({
+        error: 'Invalid job type',
+        validTypes: validJobTypes,
+      });
+      return;
+    }
+
+    // Initialize scheduler if not already initialized (needed for API server)
+    // Note: This only initializes the queue, not workers (workers are in worker process)
+    try {
+      jobScheduler.initialize();
+    } catch (error) {
+      // Ignore if already initialized
+    }
+
+    // Map route parameter to job name
+    const jobNameMap: Record<string, string> = {
+      'content-based': 'compute-content-based',
+      collaborative: 'compute-collaborative',
+      'association-rules': 'compute-association-rules',
+    };
+
+    const jobName = jobNameMap[jobType];
+
+    // Schedule job immediately (without repeat options)
+    await jobScheduler.scheduleJob({
+      name: jobName,
+      data: { triggeredManually: true, triggeredAt: new Date().toISOString() },
+      opts: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 60000, // 1 minute
+        },
+      },
+    });
+
+    res.json({
+      message: `Job ${jobName} triggered successfully`,
+      jobType,
+      jobName,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     next(error);

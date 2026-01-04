@@ -48,6 +48,7 @@ services:
       PORT: 3000
       LOG_LEVEL: info
       MONGODB_URI: mongodb://admin:password123@mongodb:27017/recommendations?authSource=admin
+      MONGODB_DB_NAME: recommendations
       MONGODB_MAX_POOL_SIZE: 100
       MONGODB_MIN_POOL_SIZE: 10
       REDIS_HOST: redis
@@ -64,6 +65,7 @@ services:
       DIVERSITY_THRESHOLD: 0.6
       MIN_ORDERS_PER_PRODUCT: 3
       CONFIDENCE_THRESHOLD: 0.3
+      MIN_SUPPORT_THRESHOLD: 0.001
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
       RATE_LIMIT_GLOBAL_MAX: 10000
@@ -94,6 +96,7 @@ services:
       NODE_ENV: development
       LOG_LEVEL: info
       MONGODB_URI: mongodb://admin:password123@mongodb:27017/recommendations?authSource=admin
+      MONGODB_DB_NAME: recommendations
       MONGODB_MAX_POOL_SIZE: 100
       MONGODB_MIN_POOL_SIZE: 10
       REDIS_HOST: redis
@@ -110,6 +113,7 @@ services:
       DIVERSITY_THRESHOLD: 0.6
       MIN_ORDERS_PER_PRODUCT: 3
       CONFIDENCE_THRESHOLD: 0.3
+      MIN_SUPPORT_THRESHOLD: 0.001
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX_REQUESTS: 100
       RATE_LIMIT_GLOBAL_MAX: 10000

@@ -5,7 +5,7 @@ import { redisClient } from './storage/redis';
 import { jobScheduler } from './jobs/scheduler';
 import { BatchExecutor } from './jobs/batch-executor';
 
-async function startWorker(): Promise<void> {
+export async function startWorker(): Promise<void> {
   try {
     // Connect to databases
     await mongoClient.connect();
@@ -36,7 +36,16 @@ async function startWorker(): Promise<void> {
     logger.info('✅ Worker started successfully');
     logger.info(`Worker concurrency: ${config.BULLMQ_CONCURRENCY}`);
   } catch (error) {
-    logger.error('Failed to start worker', { error });
+    logger.error('Failed to start worker', {
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            }
+          : error,
+    });
     process.exit(1);
   }
 }
@@ -58,8 +67,19 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Start worker
-startWorker().catch((error) => {
-  logger.error('Failed to start worker', { error });
-  process.exit(1);
-});
+// Start worker if this file is run directly
+if (require.main === module) {
+  startWorker().catch((error: unknown) => {
+    logger.error('Failed to start worker', {
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            }
+          : error,
+    });
+    process.exit(1);
+  });
+}

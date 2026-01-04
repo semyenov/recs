@@ -14,7 +14,7 @@ class MongoDBClient {
       });
 
       await this.client.connect();
-      this.db = this.client.db();
+      this.db = this.client.db(String(config.MONGODB_DB_NAME));
 
       // Create indexes
       await this.createIndexes();

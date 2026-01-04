@@ -1,4 +1,5 @@
 import { FeatureVector } from '../types';
+import { logger } from '../config/logger';
 
 // Simple cosine similarity implementation
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -48,6 +49,9 @@ export class SimilarityCalculator {
     topN: number,
     minScore: number = 0
   ): Array<{ _id: string; score: number }> {
+    logger.info(
+      `[SimilarityCalculator] Finding top ${topN} similar products for ${target._id} from ${candidates.length} candidates (minScore: ${minScore})`
+    );
     const similarities = candidates
       .filter((candidate) => candidate._id !== target._id)
       .map((candidate) => ({
@@ -57,7 +61,11 @@ export class SimilarityCalculator {
       .filter((item) => item.score >= minScore);
 
     // Sort by score descending and take top N
-    return similarities.sort((a, b) => b.score - a.score).slice(0, topN);
+    const result = similarities.sort((a, b) => b.score - a.score).slice(0, topN);
+    logger.info(
+      `[SimilarityCalculator] Found ${result.length} similar products for ${target._id} (filtered from ${similarities.length} candidates)`
+    );
+    return result;
   }
 
   /**
@@ -69,13 +77,29 @@ export class SimilarityCalculator {
     topN: number,
     minScore: number
   ): Map<string, Array<{ _id: string; score: number }>> {
+    logger.info(
+      `[SimilarityCalculator] Starting similarity matrix computation for ${vectors.length} products (topN: ${topN}, minScore: ${minScore})`
+    );
     const matrix = new Map<string, Array<{ _id: string; score: number }>>();
+
+    let processed = 0;
+    const logInterval = Math.max(1, Math.floor(vectors.length / 10)); // Log every 10%
 
     for (const vector of vectors) {
       const similar = this.findTopSimilar(vector, vectors, topN, minScore);
       matrix.set(vector._id, similar);
+      processed++;
+
+      if (processed % logInterval === 0 || processed === vectors.length) {
+        logger.info(
+          `[SimilarityCalculator] Progress: ${processed}/${vectors.length} products processed (${Math.round((processed / vectors.length) * 100)}%)`
+        );
+      }
     }
 
+    logger.info(
+      `[SimilarityCalculator] Similarity matrix computation complete: ${matrix.size} products with similarity scores`
+    );
     return matrix;
   }
 }

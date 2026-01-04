@@ -10,7 +10,12 @@ export class CollaborativeFilter {
     orders: Order[],
     minCommonUsers: number = 2
   ): Map<string, Array<{ _id: string; score: number }>> {
+    logger.info(
+      `[CollaborativeFilter] Starting item-based similarity computation from ${orders.length} orders (minCommonUsers: ${minCommonUsers})`
+    );
+
     // Step 1: Build contragent-product interaction matrix
+    logger.info('[CollaborativeFilter] Step 1: Building contragent-product interaction matrix');
     const contragentProducts = new Map<string, Set<string>>();
     const productContragents = new Map<string, Set<string>>();
 
@@ -32,10 +37,21 @@ export class CollaborativeFilter {
       }
     }
 
+    logger.info(
+      `[CollaborativeFilter] Built interaction matrix: ${contragentProducts.size} contragents, ${productContragents.size} products`
+    );
+
     // Step 2: Compute item-item similarity using Jaccard similarity
+    logger.info(
+      '[CollaborativeFilter] Step 2: Computing item-item similarity using Jaccard similarity'
+    );
     const similarityMatrix = new Map<string, Array<{ _id: string; score: number }>>();
 
     const allProducts = Array.from(productContragents.keys());
+    logger.info(`[CollaborativeFilter] Computing similarities for ${allProducts.length} products`);
+
+    let processed = 0;
+    const logInterval = Math.max(1, Math.floor(allProducts.length / 10)); // Log every 10%
 
     for (const productA of allProducts) {
       const contragentsA = productContragents.get(productA)!;
@@ -59,9 +75,22 @@ export class CollaborativeFilter {
       // Sort by score descending
       similarities.sort((a, b) => b.score - a.score);
       similarityMatrix.set(productA, similarities);
+      processed++;
+
+      if (processed % logInterval === 0 || processed === allProducts.length) {
+        logger.info(
+          `[CollaborativeFilter] Progress: ${processed}/${allProducts.length} products processed (${Math.round((processed / allProducts.length) * 100)}%)`
+        );
+      }
     }
 
-    logger.info(`Computed collaborative filtering similarity for ${allProducts.length} products`);
+    const totalSimilarities = Array.from(similarityMatrix.values()).reduce(
+      (sum, sims) => sum + sims.length,
+      0
+    );
+    logger.info(
+      `[CollaborativeFilter] Computed collaborative filtering similarity for ${allProducts.length} products (${totalSimilarities} total similarities)`
+    );
 
     return similarityMatrix;
   }
@@ -75,8 +104,15 @@ export class CollaborativeFilter {
     similarityMatrix: Map<string, Array<{ _id: string; score: number }>>,
     topN: number
   ): Array<{ _id: string; score: number }> {
+    logger.info(
+      `[CollaborativeFilter] Getting personalized recommendations for contragent ${contragentId} (topN: ${topN})`
+    );
+
     // Get products the contragent has already purchased
     const contragentOrders = orders.filter((o) => o.contragentId === contragentId);
+    logger.info(
+      `[CollaborativeFilter] Found ${contragentOrders.length} orders for contragent ${contragentId}`
+    );
     const purchasedProducts = new Set<string>();
 
     for (const order of contragentOrders) {
@@ -86,7 +122,12 @@ export class CollaborativeFilter {
       }
     }
 
+    logger.info(
+      `[CollaborativeFilter] Contragent ${contragentId} has purchased ${purchasedProducts.size} unique products`
+    );
+
     // Aggregate recommendations from all purchased products
+    logger.info('[CollaborativeFilter] Aggregating recommendations from purchased products');
     const candidateScores = new Map<string, number>();
 
     for (const productId of purchasedProducts) {
@@ -101,6 +142,10 @@ export class CollaborativeFilter {
       }
     }
 
+    logger.info(
+      `[CollaborativeFilter] Found ${candidateScores.size} candidate recommendations for contragent ${contragentId}`
+    );
+
     // Convert to array, normalize by number of purchased products, sort, and take top N
     const recommendations = Array.from(candidateScores.entries())
       .map(([_id, totalScore]) => ({
@@ -109,6 +154,10 @@ export class CollaborativeFilter {
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, topN);
+
+    logger.info(
+      `[CollaborativeFilter] Generated ${recommendations.length} recommendations for contragent ${contragentId}`
+    );
 
     return recommendations;
   }

@@ -306,6 +306,32 @@ export class OrderRepository {
     const innerMap = map.get(productA)!;
     innerMap.set(productB, (innerMap.get(productB) || 0) + 1);
   }
+
+  /**
+   * Get the number of orders containing each product
+   * Returns a map of productId -> number of orders containing that product
+   */
+  async getProductFrequencies(includeDeleted: boolean = false): Promise<Map<string, number>> {
+    const db = mongoClient.getDb();
+    const filter: Record<string, unknown> = {};
+    if (!includeDeleted) {
+      filter.deleted = { $ne: true };
+      filter.enabled = { $ne: false };
+    }
+    const orders = await db.collection<Order>('orders').find(filter).toArray();
+
+    const productFrequencies = new Map<string, number>();
+
+    for (const order of orders) {
+      const productIds = Object.keys(order.products);
+      // Count each product once per order
+      for (const productId of productIds) {
+        productFrequencies.set(productId, (productFrequencies.get(productId) || 0) + 1);
+      }
+    }
+
+    return productFrequencies;
+  }
 }
 
 export class RecommendationRepository {
@@ -332,6 +358,12 @@ export class RecommendationRepository {
   }
 
   async bulkUpsert(recommendations: Recommendation[]): Promise<void> {
+    // Skip if no recommendations to save (MongoDB doesn't allow empty bulk operations)
+    if (recommendations.length === 0) {
+      logger.info('No recommendations to upsert, skipping bulk operation');
+      return;
+    }
+
     const db = mongoClient.getDb();
     const bulkOps = recommendations.map((rec) => ({
       updateOne: {

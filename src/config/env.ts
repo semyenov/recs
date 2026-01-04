@@ -15,6 +15,7 @@ const envSchema = z.object({
 
   // MongoDB
   MONGODB_URI: z.string().url().startsWith('mongodb'),
+  MONGODB_DB_NAME: z.string().min(1).default('recommendations'),
   MONGODB_MAX_POOL_SIZE: z.coerce.number().int().positive().default(100),
   MONGODB_MIN_POOL_SIZE: z.coerce.number().int().positive().default(10),
 
@@ -42,6 +43,7 @@ const envSchema = z.object({
   DIVERSITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
   MIN_ORDERS_PER_PRODUCT: z.coerce.number().int().positive().default(3),
   CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
+  MIN_SUPPORT_THRESHOLD: z.coerce.number().min(0).max(1).default(0.001),
 
   // Rate Limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),

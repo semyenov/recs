@@ -17,6 +17,9 @@ export class FeatureExtractor {
    * If not called, features will be discovered from the first product processed.
    */
   discoverFeatureKeys(products: Product[]): string[] {
+    logger.info(
+      `[FeatureExtractor] Starting feature key discovery from ${products.length} products`
+    );
     const numericKeys = new Set<string>();
 
     for (const product of products) {
@@ -44,7 +47,9 @@ export class FeatureExtractor {
     const sortedKeys = Array.from(numericKeys).sort();
     this.featureKeys = sortedKeys;
 
-    logger.info(`Discovered ${sortedKeys.length} numeric feature keys: ${sortedKeys.join(', ')}`);
+    logger.info(
+      `[FeatureExtractor] Discovered ${sortedKeys.length} numeric feature keys: ${sortedKeys.join(', ')}`
+    );
     return sortedKeys;
   }
 
@@ -85,13 +90,19 @@ export class FeatureExtractor {
     }
 
     const categoryKey = product.category || product.categoryId || product.categoryName || 'unknown';
+    logger.info(
+      `[FeatureExtractor] Extracting features for product ${product._id} (category: ${categoryKey})`
+    );
     const stats = this.categoryStats.get(categoryKey);
     if (!stats) {
-      logger.warn(`No category statistics found for category: ${categoryKey}`);
+      logger.warn(`[FeatureExtractor] No category statistics found for category: ${categoryKey}`);
     }
 
     // Get feature keys, discovering from stats if needed
     let featureKeys = this.getFeatureKeys(stats);
+    logger.info(
+      `[FeatureExtractor] Using ${featureKeys.length} feature keys for product ${product._id}`
+    );
 
     // If still no keys, discover from this product
     if (featureKeys.length === 0) {
@@ -115,14 +126,19 @@ export class FeatureExtractor {
       this.featureKeys = featureKeys;
       if (featureKeys.length > 0) {
         logger.info(
-          `Discovered feature keys from product ${product._id}: ${featureKeys.join(', ')}`
+          `[FeatureExtractor] Discovered feature keys from product ${product._id}: ${featureKeys.join(', ')}`
         );
       }
     }
 
     // Extract numeric features with median imputation
+    logger.info(
+      `[FeatureExtractor] Extracting ${featureKeys.length} features for product ${product._id}`
+    );
     const features: number[] = [];
     const presenceIndicators: number[] = [];
+    let presentCount = 0;
+    let imputedCount = 0;
 
     for (const key of featureKeys) {
       let value: number | undefined;
@@ -145,13 +161,19 @@ export class FeatureExtractor {
       if (value !== undefined) {
         features.push(value);
         presenceIndicators.push(1);
+        presentCount++;
       } else {
         // Use median from category stats if available, otherwise 0
         const median = stats?.medians[key];
         features.push(typeof median === 'number' ? median : 0);
         presenceIndicators.push(0);
+        imputedCount++;
       }
     }
+
+    logger.info(
+      `[FeatureExtractor] Extracted features for product ${product._id}: ${presentCount} present, ${imputedCount} imputed`
+    );
 
     return {
       _id: product._id,
@@ -162,12 +184,20 @@ export class FeatureExtractor {
   }
 
   normalizeFeatures(vectors: FeatureVector[]): FeatureVector[] {
-    if (vectors.length === 0) return [];
+    if (vectors.length === 0) {
+      logger.info('[FeatureExtractor] No vectors to normalize');
+      return [];
+    }
 
     const numFeatures = vectors[0].features.length;
+    logger.info(
+      `[FeatureExtractor] Starting normalization of ${vectors.length} vectors with ${numFeatures} features each`
+    );
+
     const featureStats: Array<{ mean: number; std: number }> = [];
 
     // Calculate mean and std for each feature
+    logger.info('[FeatureExtractor] Calculating mean and standard deviation for each feature');
     for (let i = 0; i < numFeatures; i++) {
       const values = vectors.map((v) => v.features[i]);
       const meanVal = Number(mean(values));
@@ -175,8 +205,9 @@ export class FeatureExtractor {
       featureStats.push({ mean: meanVal, std: stdVal });
     }
 
+    logger.info('[FeatureExtractor] Applying normalization to all vectors');
     // Normalize each vector
-    return vectors.map((vector) => ({
+    const normalized = vectors.map((vector) => ({
       ...vector,
       features: vector.features.map((value, i) => {
         const { mean: meanVal, std: stdVal } = featureStats[i];
@@ -184,17 +215,39 @@ export class FeatureExtractor {
       }),
       normalized: true,
     }));
+
+    logger.info(`[FeatureExtractor] Normalization complete for ${normalized.length} vectors`);
+    return normalized;
   }
 
   batchExtractAndNormalize(products: Product[]): FeatureVector[] {
-    if (products.length === 0) return [];
+    if (products.length === 0) {
+      logger.info('[FeatureExtractor] No products to process in batch');
+      return [];
+    }
+
+    logger.info(
+      `[FeatureExtractor] Starting batch extraction and normalization for ${products.length} products`
+    );
 
     // Discover feature keys from all products if not already set
     if (!this.featureKeys) {
+      logger.info('[FeatureExtractor] Feature keys not set, discovering from products');
       this.discoverFeatureKeys(products);
+    } else {
+      logger.info(`[FeatureExtractor] Using existing feature keys: ${this.featureKeys.join(', ')}`);
     }
 
+    logger.info('[FeatureExtractor] Extracting features from all products');
     const vectors = products.map((p) => this.extractFeatures(p));
-    return this.normalizeFeatures(vectors);
+    logger.info(
+      `[FeatureExtractor] Extracted features from ${vectors.length} products, starting normalization`
+    );
+
+    const normalized = this.normalizeFeatures(vectors);
+    logger.info(
+      `[FeatureExtractor] Batch extraction and normalization complete: ${normalized.length} feature vectors ready`
+    );
+    return normalized;
   }
 }

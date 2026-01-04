@@ -65,6 +65,7 @@ LOG_LEVEL=info
 
 # MongoDB
 MONGODB_URI=mongodb://localhost:27017/recommendations
+MONGODB_DB_NAME=recommendations
 
 # Redis
 REDIS_HOST=localhost

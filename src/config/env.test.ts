@@ -47,6 +47,8 @@ describe('Environment Configuration', () => {
     expect(config.DIVERSITY_THRESHOLD).toBeLessThanOrEqual(1);
     expect(config.CONFIDENCE_THRESHOLD).toBeGreaterThan(0);
     expect(config.CONFIDENCE_THRESHOLD).toBeLessThanOrEqual(1);
+    expect(config.MIN_SUPPORT_THRESHOLD).toBeGreaterThan(0);
+    expect(config.MIN_SUPPORT_THRESHOLD).toBeLessThanOrEqual(1);
   });
 
   it('should have metrics configuration', () => {

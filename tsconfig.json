@@ -22,7 +22,7 @@
     "experimentalDecorators": true,
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*", "scripts/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
 

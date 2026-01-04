@@ -11,12 +11,17 @@ describe('AssociationRuleMiner', () => {
   describe('mineRules', () => {
     it('should mine association rules with sufficient support and confidence', () => {
       // 10 total orders
+      // P001 appears in 8 orders, P002 appears in 8 orders
       // P001 and P002 appear together 8 times
       const coOccurrences = new Map<string, Map<string, number>>();
       coOccurrences.set('P001', new Map([['P002', 8]]));
       coOccurrences.set('P002', new Map([['P001', 8]]));
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 8);
+      productFrequencies.set('P002', 8);
 
-      const rules = miner.mineRules(coOccurrences, 10, 0.01, 0.3);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 10, 0.01, 0.3);
 
       expect(rules.size).toBe(2);
       expect(rules.has('P001')).toBe(true);
@@ -34,9 +39,13 @@ describe('AssociationRuleMiner', () => {
     it('should filter rules by minimum support', () => {
       const coOccurrences = new Map<string, Map<string, number>>();
       coOccurrences.set('P001', new Map([['P002', 1]])); // Only 1 co-occurrence
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 10);
+      productFrequencies.set('P002', 10);
 
       // Min support = 0.5 (50%), but only 1/100 = 1%
-      const rules = miner.mineRules(coOccurrences, 100, 0.5, 0.3);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.5, 0.3);
 
       const p001Rules = rules.get('P001');
       expect(p001Rules).toBeDefined();
@@ -45,24 +54,31 @@ describe('AssociationRuleMiner', () => {
 
     it('should filter rules by minimum confidence', () => {
       const coOccurrences = new Map<string, Map<string, number>>();
-      // P001 appears 100 times, but with P002 only 10 times = 10% confidence
+      // P001 appears in 100 orders, but with P002 only 10 times = 10% confidence
       coOccurrences.set('P001', new Map([['P002', 10]]));
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 100);
+      productFrequencies.set('P002', 50);
 
       // Min confidence = 50% (should filter out 10% confidence rule)
-      const rules = miner.mineRules(coOccurrences, 100, 0.01, 0.5);
+      // Confidence = 10/100 = 0.1 (10%), which is less than 0.5
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.01, 0.5);
 
       const p001Rules = rules.get('P001');
       expect(p001Rules).toBeDefined();
-      // Note: The actual confidence calculation is 10/100 = 0.1 (10%)
-      // which is less than 0.5, but the algorithm calculates differently
-      expect(p001Rules!.length).toBeGreaterThanOrEqual(0);
+      expect(p001Rules!.length).toBe(0); // Filtered out by confidence
     });
 
     it('should calculate correct support values', () => {
       const coOccurrences = new Map<string, Map<string, number>>();
       coOccurrences.set('P001', new Map([['P002', 30]])); // 30 co-occurrences out of 100
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 50);
+      productFrequencies.set('P002', 60);
 
-      const rules = miner.mineRules(coOccurrences, 100, 0.01, 0.3);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.01, 0.3);
 
       const p001Rules = rules.get('P001');
       expect(p001Rules![0].support).toBeCloseTo(0.3, 2); // 30/100 = 0.3
@@ -72,8 +88,12 @@ describe('AssociationRuleMiner', () => {
       const coOccurrences = new Map<string, Map<string, number>>();
       coOccurrences.set('P001', new Map([['P002', 20]]));
       coOccurrences.set('P002', new Map([['P001', 20]]));
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 40);
+      productFrequencies.set('P002', 50);
 
-      const rules = miner.mineRules(coOccurrences, 100, 0.01, 0.3);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.01, 0.3);
 
       const p001Rules = rules.get('P001');
       expect(p001Rules![0].lift).toBeGreaterThan(0);
@@ -88,8 +108,13 @@ describe('AssociationRuleMiner', () => {
           ['P003', 20], // Lower confidence
         ])
       );
+      
+      const productFrequencies = new Map<string, number>();
+      productFrequencies.set('P001', 100);
+      productFrequencies.set('P002', 90);
+      productFrequencies.set('P003', 30);
 
-      const rules = miner.mineRules(coOccurrences, 100, 0.01, 0.1);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.01, 0.1);
 
       const p001Rules = rules.get('P001');
       expect(p001Rules!.length).toBe(2);
@@ -98,8 +123,9 @@ describe('AssociationRuleMiner', () => {
 
     it('should handle empty co-occurrences', () => {
       const coOccurrences = new Map<string, Map<string, number>>();
+      const productFrequencies = new Map<string, number>();
 
-      const rules = miner.mineRules(coOccurrences, 100, 0.01, 0.3);
+      const rules = miner.mineRules(coOccurrences, productFrequencies, 100, 0.01, 0.3);
 
       expect(rules.size).toBe(0);
     });

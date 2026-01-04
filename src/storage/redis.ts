@@ -16,7 +16,8 @@ export class RedisClient {
           const delay = Math.min(times * 50, 2000);
           return delay;
         },
-        maxRetriesPerRequest: 3,
+        // BullMQ requires maxRetriesPerRequest to be null for blocking operations
+        maxRetriesPerRequest: null,
       });
 
       this.client.on('error', (error: Error) => {
