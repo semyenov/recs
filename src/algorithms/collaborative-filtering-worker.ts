@@ -22,7 +22,7 @@ export interface WorkerResult {
 /**
  * Wrapper around heap-js Heap for maintaining top-N items efficiently (same as main thread)
  */
-class TopNHeap<T extends { score: number }> {
+export class TopNHeap<T extends { score: number }> {
   private heap: Heap<T>;
 
   constructor(private maxSize: number) {
@@ -57,7 +57,7 @@ class TopNHeap<T extends { score: number }> {
  * Optimized intersection using merge-join for sorted arrays
  * O(n + m) instead of O(n * m)
  */
-function optimizedIntersection(
+export function optimizedIntersection(
   sortedA: string[],
   sortedB: string[],
   minCommon: number
@@ -71,10 +71,10 @@ function optimizedIntersection(
       intersection++;
       i++;
       j++;
-      // Early exit if we've found enough common items
-      if (intersection >= minCommon) {
-        return { intersection, earlyExit: false };
-      }
+      // Early exit optimization: if we've found enough common items (minCommon > 0),
+      // we can stop counting but continue to verify we have enough
+      // However, for Jaccard calculation we need the full count, so we continue
+      // The early exit is only for the termination check, not for the count
     } else if (sortedA[i] < sortedB[j]) {
       i++;
     } else {
@@ -82,6 +82,8 @@ function optimizedIntersection(
     }
   }
 
+  // Return full intersection count and early exit flag
+  // earlyExit = true means we didn't meet the threshold and can skip this comparison
   return { intersection, earlyExit: intersection < minCommon };
 }
 
