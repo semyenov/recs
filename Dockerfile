@@ -3,9 +3,6 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Update npm to latest version
-RUN npm install -g npm@latest
-
 # Copy package files
 COPY package.json ./
 COPY package-lock.json ./
@@ -31,9 +28,6 @@ RUN npm run build
 FROM node:18-alpine
 
 WORKDIR /app
-
-# Update npm to latest version
-RUN npm install -g npm@latest
 
 # Copy package files and install production dependencies only
 COPY package.json ./
