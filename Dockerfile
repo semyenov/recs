@@ -3,12 +3,23 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Update npm to latest version
+RUN npm install -g npm@latest
+
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
+COPY package-lock.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci
+# Verify files and install dependencies
+RUN ls -la && \
+    if [ -f package-lock.json ]; then \
+      echo "Found package-lock.json, using npm ci" && \
+      npm ci --verbose; \
+    else \
+      echo "Error: package-lock.json not found!" && \
+      exit 1; \
+    fi
 
 # Copy source code
 COPY src ./src
@@ -21,9 +32,22 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Update npm to latest version
+RUN npm install -g npm@latest
+
 # Copy package files and install production dependencies only
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json ./
+COPY package-lock.json ./
+
+# Verify files and install production dependencies
+RUN ls -la && \
+    if [ -f package-lock.json ]; then \
+      echo "Found package-lock.json, using npm ci" && \
+      npm ci --omit=dev --verbose; \
+    else \
+      echo "Error: package-lock.json not found!" && \
+      exit 1; \
+    fi
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
